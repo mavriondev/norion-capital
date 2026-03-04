@@ -28,6 +28,7 @@ export default function NorionLoginPage() {
     setSubmitting(true);
     try {
       await login({ username, password });
+      setLocation("/");
     } catch (err: any) {
       toast({ title: "Erro ao fazer login", description: err.message || "Credenciais inválidas", variant: "destructive" });
     } finally {

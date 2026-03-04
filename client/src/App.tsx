@@ -1,8 +1,9 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { useAuth } from "@/hooks/use-auth";
+import { useEffect } from "react";
 
 import NorionLoginPage from "@/pages/login";
 import NorionDashboardPage from "@/pages/dashboard";
@@ -34,8 +35,13 @@ import PortalClienteFormulario from "@/pages/portal-cliente-formulario";
 function NorionAuthGuard({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
+  useEffect(() => {
+    if (!isLoading && !user) {
+      setLocation("/login");
+    }
+  }, [isLoading, user, setLocation]);
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white">Carregando...</div>;
-  if (!user) { setLocation("/login"); return null; }
+  if (!user) return null;
   return <>{children}</>;
 }
 

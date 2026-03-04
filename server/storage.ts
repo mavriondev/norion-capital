@@ -20,15 +20,17 @@ export function getOrgId(): number {
   return DEFAULT_ORG_ID;
 }
 
-export async function audit(
-  orgId: number,
-  userId: number | null,
-  action: string,
-  entity: string,
-  entityId: number | null,
-  details?: any
-) {
-  console.log(`[AUDIT] org=${orgId} user=${userId} action=${action} entity=${entity} entityId=${entityId}`);
+export async function audit(params: {
+  orgId: number;
+  userId?: number | null;
+  userName?: string | null;
+  entity: string;
+  entityId?: number | null;
+  entityTitle?: string | null;
+  action: string;
+  changes?: any;
+}) {
+  console.log(`[AUDIT] org=${params.orgId} user=${params.userId} action=${params.action} entity=${params.entity} entityId=${params.entityId}`);
 }
 
 class DatabaseStorage {
