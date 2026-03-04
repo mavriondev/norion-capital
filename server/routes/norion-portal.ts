@@ -153,7 +153,7 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
       }
 
       const fileBuffer = Buffer.from(fileBase64, "base64");
-      const result = await uploadToDrive(fileBuffer, fileName, mimeType || "application/pdf", ["Mavrion Conect", "Norion", "Portal Cliente", companyName]);
+      const result = await uploadToDrive(fileBuffer, fileName, mimeType || "application/pdf", ["Norion Capital", "Portal Cliente", companyName]);
 
       const [updated] = await db.update(norionDocuments)
         .set({

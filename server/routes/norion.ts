@@ -522,7 +522,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       }
 
       const fileBuffer = Buffer.from(fileBase64, "base64");
-      const result = await uploadToDrive(fileBuffer, fileName, mimeType || "application/pdf", ["Mavrion Conect", "Norion", companyName]);
+      const result = await uploadToDrive(fileBuffer, fileName, mimeType || "application/pdf", ["Norion Capital", companyName]);
 
       const updated = await storage.updateNorionDocument(docId, orgId, {
         driveFileId: result.fileId,

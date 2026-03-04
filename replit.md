@@ -55,6 +55,7 @@ shared/
 
 ## Integrations
 - GitHub connector (installed via Replit integrations) - used for importing the project
+- Google Drive connector (installed via Replit integrations) - used for document uploads; files are stored under the "Norion Capital" root folder in Drive
 - PostgreSQL database (Replit built-in)
 
 ## Notes
