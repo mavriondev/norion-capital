@@ -102,6 +102,7 @@ shared/
 - Profile score (0-100) calculated from enrichment data: CNAE, porte, situação, capital social, CAF/DAP, SICOR, endereço
 - Empresa-detalhe redesigned with 6 tabs: Visão Geral, QSA/Sócios, CAF/DAP, SICOR, IBGE, Operações
 - Each tab has individual "Atualizar" button calling `POST /api/norion/companies/:id/enrich/:source`
+- IBGE enrichment: uses `lookupMunicipioCode()` with 24h in-memory cache to resolve municipality name → IBGE code when codigoMunicipio is missing (common with demo/test data and older enrichment data)
 - Matching com fundos enriquecido: score de perfil, situação ativa, CAF/DAP, capital social como fatores adicionais
 - Endpoints:
   - `POST /api/norion/companies/:id/enrich` — full enrichment

@@ -138,6 +138,36 @@ async function fetchSICOR(uf: string, municipio: string) {
   return { totalContratos, totalValor, principaisProdutos, consultadoEm: new Date().toISOString() };
 }
 
+let cachedMunicipios: any[] | null = null;
+let cachedMunicipiosAt = 0;
+const MUNICIPIOS_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+async function lookupMunicipioCode(municipioName: string, uf?: string): Promise<string | null> {
+  if (!municipioName) return null;
+  try {
+    if (!cachedMunicipios || Date.now() - cachedMunicipiosAt > MUNICIPIOS_CACHE_TTL) {
+      const res = await fetchWithTimeout(`https://servicodados.ibge.gov.br/api/v1/localidades/municipios`);
+      if (!res) return null;
+      cachedMunicipios = await res.json();
+      cachedMunicipiosAt = Date.now();
+    }
+    const normalized = municipioName.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const matches = cachedMunicipios!.filter((m: any) => {
+      const name = (m.nome || "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      return name === normalized;
+    });
+    if (matches.length === 0) return null;
+    if (uf) {
+      const ufMatch = matches.find((m: any) => m.microrregiao?.mesorregiao?.UF?.sigla === uf.toUpperCase());
+      if (ufMatch) return ufMatch.id?.toString() || null;
+    }
+    if (matches.length === 1) return matches[0].id?.toString() || null;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchIBGE(codigoMunicipio: string) {
   if (!codigoMunicipio) return null;
   const code = codigoMunicipio.toString().substring(0, 7);
@@ -410,9 +440,16 @@ export async function enrichSource(companyId: number, sourceType: string, db: an
     sourceData = data;
   } else if (sourceType === "ibge") {
     const addr = company.address as any || {};
-    const codMun = addr.codigoMunicipio || addr.codigoMunicipioIbge
+    let codMun = addr.codigoMunicipio || addr.codigoMunicipioIbge
       || enrichment?.cnpj?.endereco?.codigoMunicipio
       || enrichment?.cnpj?.endereco?.codigoMunicipioIbge;
+    if (!codMun) {
+      const munName = addr.municipio || enrichment?.cnpj?.endereco?.municipio;
+      const uf = addr.uf || enrichment?.cnpj?.endereco?.uf;
+      if (munName) {
+        codMun = await lookupMunicipioCode(munName, uf);
+      }
+    }
     if (!codMun) return { error: "Código do município não disponível para consultar IBGE" };
     const data = await fetchIBGE(codMun);
     if (!data) return { error: "Falha ao consultar IBGE" };
@@ -499,7 +536,10 @@ export async function enrichCompany(companyId: number, db: any): Promise<{
 
         const uf = brasilData.endereco?.uf;
         const municipio = brasilData.endereco?.municipio;
-        const codMunicipio = brasilData.endereco?.codigoMunicipio || brasilData.endereco?.codigoMunicipioIbge;
+        let codMunicipio = brasilData.endereco?.codigoMunicipio || brasilData.endereco?.codigoMunicipioIbge;
+        if (!codMunicipio && municipio) {
+          codMunicipio = await lookupMunicipioCode(municipio, uf);
+        }
 
         const [sicorResult, ibgeResult] = await Promise.allSettled([
           uf ? fetchSICOR(uf, municipio) : Promise.resolve(null),
