@@ -488,7 +488,7 @@ export default function PortalClienteFormulario() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
       </div>
     );
@@ -497,12 +497,12 @@ export default function PortalClienteFormulario() {
   const progressPercent = (currentStep / 6) * 100;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <header className="sticky top-0 z-40 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm">
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800">
+      <header className="sticky top-0 z-40 bg-slate-800 border-b border-slate-700 shadow-sm">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-amber-500" />
-            <span className="font-bold text-sm text-slate-800 dark:text-white">Norion Capital</span>
+            <span className="font-bold text-sm text-white">Norion Capital</span>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -522,35 +522,35 @@ export default function PortalClienteFormulario() {
         </div>
         {clientName && (
           <div className="max-w-lg mx-auto px-4 pb-2">
-            <p className="text-xs text-slate-500 dark:text-slate-400">Olá, <span className="font-medium text-slate-700 dark:text-slate-300">{clientName}</span></p>
+            <p className="text-xs text-slate-400">Olá, <span className="font-medium text-slate-200">{clientName}</span></p>
           </div>
         )}
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-4 space-y-4 pb-24">
         {isRevisao && formData.observacaoRevisao && (
-          <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/30" data-testid="banner-revisao">
+          <Card className="border-amber-500/40 bg-amber-950/30" data-testid="banner-revisao">
             <CardContent className="p-4 flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Revisão Solicitada</p>
-                <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">{formData.observacaoRevisao}</p>
-                <p className="text-xs text-amber-600 dark:text-amber-500 mt-2">Corrija os itens indicados e envie novamente.</p>
+                <p className="text-sm font-medium text-amber-300">Revisão Solicitada</p>
+                <p className="text-sm text-amber-400 mt-1">{formData.observacaoRevisao}</p>
+                <p className="text-xs text-amber-500 mt-2">Corrija os itens indicados e envie novamente.</p>
               </div>
             </CardContent>
           </Card>
         )}
 
         {isReadOnly && (
-          <Card className="border-green-300 bg-green-50 dark:bg-green-950/30" data-testid="banner-readonly">
+          <Card className="border-green-500/40 bg-green-950/30" data-testid="banner-readonly">
             <CardContent className="p-4 space-y-4">
               <div className="flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                  <p className="text-sm font-medium text-green-300">
                     {formData.status === "aprovado" ? "Formulário Aprovado" : "Formulário Enviado"}
                   </p>
-                  <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
+                  <p className="text-xs text-green-400 mt-0.5">
                     {formData.status === "aprovado"
                       ? "Seu formulário foi aprovado pela equipe Norion Capital."
                       : "Seu formulário está em análise pela equipe Norion Capital."}
@@ -561,8 +561,8 @@ export default function PortalClienteFormulario() {
               {formData.status === "enviado" && (
                 <div className="space-y-3" data-testid="section-proximos-passos">
                   <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-green-600" />
-                    <p className="text-xs font-medium text-green-800 dark:text-green-300">Prazo estimado: até 5 dias úteis</p>
+                    <Clock className="w-4 h-4 text-green-500" />
+                    <p className="text-xs font-medium text-green-300">Prazo estimado: até 5 dias úteis</p>
                   </div>
 
                   <div className="space-y-0" data-testid="timeline-proximos-passos">
@@ -575,41 +575,33 @@ export default function PortalClienteFormulario() {
                         <div className="flex flex-col items-center">
                           <div className={cn(
                             "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
-                            step.active
-                              ? "bg-green-200 dark:bg-green-800"
-                              : "bg-green-100 dark:bg-green-900/50"
+                            step.active ? "bg-green-800" : "bg-green-900/50"
                           )}>
                             <step.icon className={cn(
                               "w-3.5 h-3.5",
-                              step.active
-                                ? "text-green-700 dark:text-green-300"
-                                : "text-green-400 dark:text-green-600"
+                              step.active ? "text-green-300" : "text-green-600"
                             )} />
                           </div>
                           {idx < 2 && (
-                            <div className="w-px h-6 bg-green-200 dark:bg-green-800" />
+                            <div className="w-px h-6 bg-green-800" />
                           )}
                         </div>
                         <div className="pt-1">
                           <p className={cn(
                             "text-xs font-medium",
-                            step.active
-                              ? "text-green-800 dark:text-green-300"
-                              : "text-green-500 dark:text-green-500"
+                            step.active ? "text-green-300" : "text-green-500"
                           )}>{step.label}</p>
                           <p className={cn(
                             "text-[11px]",
-                            step.active
-                              ? "text-green-600 dark:text-green-400"
-                              : "text-green-400 dark:text-green-600"
+                            step.active ? "text-green-400" : "text-green-600"
                           )}>{step.description}</p>
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  <div className="bg-green-100 dark:bg-green-900/40 rounded-md p-3 mt-2" data-testid="info-acompanhar">
-                    <p className="text-[11px] text-green-700 dark:text-green-400">
+                  <div className="bg-green-900/40 rounded-md p-3 mt-2" data-testid="info-acompanhar">
+                    <p className="text-[11px] text-green-400">
                       Acompanhe o status dos seus documentos na aba <span className="font-medium">Documentos</span>. Se necessário, nossa equipe poderá solicitar correções ou documentos adicionais.
                     </p>
                   </div>
@@ -620,7 +612,7 @@ export default function PortalClienteFormulario() {
         )}
 
         <div className="space-y-2" data-testid="wizard-stepper">
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
+          <div className="flex items-center justify-between text-xs text-slate-400 px-1">
             <span>Etapa {currentStep} de 6</span>
             <span>{Math.round(progressPercent)}%</span>
           </div>
@@ -641,9 +633,9 @@ export default function PortalClienteFormulario() {
                   }}
                   className={cn(
                     "flex-1 flex flex-col items-center gap-0.5 py-2 rounded-lg text-[10px] transition-all",
-                    isActive && "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium",
-                    isDone && "text-green-600 dark:text-green-400",
-                    !isActive && !isDone && "text-slate-400 dark:text-slate-500",
+                    isActive && "bg-amber-900/30 text-amber-400 font-medium",
+                    isDone && "text-green-400",
+                    !isActive && !isDone && "text-slate-500",
                   )}
                   data-testid={`step-button-${step.key}`}
                 >
@@ -657,7 +649,7 @@ export default function PortalClienteFormulario() {
 
         <Card className="shadow-sm">
           <CardContent className="p-5 space-y-4">
-            <h2 className="font-semibold text-base flex items-center gap-2 text-slate-800 dark:text-white" data-testid="step-title">
+            <h2 className="font-semibold text-base flex items-center gap-2 text-white" data-testid="step-title">
               {(() => { const S = STEPS[currentStep - 1]; const I = S.icon; return <><I className="w-4.5 h-4.5 text-amber-500" /> {S.label}</>; })()}
             </h2>
 
@@ -752,7 +744,7 @@ export default function PortalClienteFormulario() {
                     {cnpjLoading && <Loader2 className="w-4 h-4 animate-spin self-center text-amber-500" />}
                   </div>
                   {cnpjData && (
-                    <div className="text-xs bg-green-50 dark:bg-green-950/30 p-2 rounded border border-green-200 mt-1" data-testid="cnpj-lookup-result">
+                    <div className="text-xs bg-green-950/30 p-2 rounded border border-green-700 mt-1 text-green-300" data-testid="cnpj-lookup-result">
                       <p className="font-medium">{cnpjData.company?.name || cnpjData.alias || "—"}</p>
                       {cnpjData.mainActivity && (
                         <p className="text-muted-foreground mt-0.5">CNAE: {cnpjData.mainActivity.id} — {cnpjData.mainActivity.text}</p>
@@ -812,10 +804,10 @@ export default function PortalClienteFormulario() {
 
             {currentStep === 5 && (
               <div className="space-y-4" data-testid="step-patrimonio">
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-slate-50 dark:bg-slate-800">
+                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-700 bg-slate-800/60">
                   <div className="flex items-center gap-2">
-                    <Home className="w-4 h-4 text-slate-500" />
-                    <span className="text-sm font-medium">Possui Imóvel?</span>
+                    <Home className="w-4 h-4 text-slate-400" />
+                    <span className="text-sm font-medium text-slate-200">Possui Imóvel?</span>
                   </div>
                   <Switch checked={formData.possuiImovel || false} onCheckedChange={(v) => setField("possuiImovel", v)} disabled={isReadOnly} data-testid="switch-imovel" />
                 </div>
@@ -824,10 +816,10 @@ export default function PortalClienteFormulario() {
                     <CurrencyInput value={formData.valorImovel} onChange={(v) => setField("valorImovel", v)} disabled={isReadOnly} data-testid="input-valor-imovel" />
                   </FieldGroup>
                 )}
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-slate-50 dark:bg-slate-800">
+                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-700 bg-slate-800/60">
                   <div className="flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-slate-500" />
-                    <span className="text-sm font-medium">Possui Veículo?</span>
+                    <CreditCard className="w-4 h-4 text-slate-400" />
+                    <span className="text-sm font-medium text-slate-200">Possui Veículo?</span>
                   </div>
                   <Switch checked={formData.possuiVeiculo || false} onCheckedChange={(v) => setField("possuiVeiculo", v)} disabled={isReadOnly} data-testid="switch-veiculo" />
                 </div>
@@ -861,7 +853,7 @@ export default function PortalClienteFormulario() {
                         <CardContent className="p-0">
                           <button
                             onClick={() => setExpandedCategories(prev => ({ ...prev, [catKey]: !prev[catKey] }))}
-                            className="w-full flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                            className="w-full flex items-center justify-between p-4 hover:bg-slate-700/50 transition-colors"
                             data-testid={`button-toggle-category-${catKey}`}
                           >
                             <div className="flex items-center gap-2">
@@ -877,12 +869,12 @@ export default function PortalClienteFormulario() {
                                 const statusConf = STATUS_CONFIG[doc.status] || STATUS_CONFIG.pendente;
                                 const isUploading = uploadMutation.isPending && uploadingDocId === doc.id;
                                 return (
-                                  <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg border bg-white dark:bg-slate-800" data-testid={`portal-doc-${doc.id}`}>
+                                  <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-700 bg-slate-800/60" data-testid={`portal-doc-${doc.id}`}>
                                     <div className="flex-1 min-w-0 mr-3">
-                                      <p className="text-sm font-medium truncate">{doc.nomeDocumento || doc.tipoDocumento}</p>
+                                      <p className="text-sm font-medium truncate text-slate-100">{doc.nomeDocumento || doc.tipoDocumento}</p>
                                       <div className="flex items-center gap-2 mt-0.5">
                                         <Badge variant={statusConf.variant} className="text-[10px]">{statusConf.label}</Badge>
-                                        {doc.obrigatorio && <span className="text-[10px] text-red-500">Obrigatório</span>}
+                                        {doc.obrigatorio && <span className="text-[10px] text-red-400">Obrigatório</span>}
                                       </div>
                                       {doc.status === "rejeitado" && doc.observacao && (
                                         <p className="text-[10px] text-red-500 mt-1">{doc.observacao}</p>
@@ -960,7 +952,7 @@ export default function PortalClienteFormulario() {
 
       {previewUrl && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl max-w-md w-full overflow-hidden">
+          <div className="bg-slate-800 rounded-xl max-w-md w-full overflow-hidden">
             <div className="p-3 border-b flex items-center justify-between">
               <span className="text-sm font-medium">Confirmar Envio</span>
               <Button variant="ghost" size="sm" onClick={cancelPreview}><X className="w-4 h-4" /></Button>
@@ -987,8 +979,8 @@ export default function PortalClienteFormulario() {
 function FieldGroup({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) {
   return (
     <div className="space-y-1.5">
-      <Label className={cn("text-xs", error ? "text-red-500" : "text-slate-600 dark:text-slate-400")}>{label}</Label>
-      {error && <div className="[&>input]:border-red-400 [&>input]:dark:border-red-500 [&>div>input]:border-red-400 [&>button]:border-red-400">{children}</div>}
+      <Label className={cn("text-xs", error ? "text-red-400" : "text-slate-400")}>{label}</Label>
+      {error && <div className="[&>input]:border-red-400 [&>div>input]:border-red-400 [&>button]:border-red-400">{children}</div>}
       {!error && children}
       {error && <p className="text-[11px] text-red-500" data-testid="error-field">{error}</p>}
     </div>

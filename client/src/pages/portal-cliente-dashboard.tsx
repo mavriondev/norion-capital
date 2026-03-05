@@ -224,7 +224,7 @@ export default function PortalClienteDashboard() {
   const progressPercent = totalDocs > 0 ? Math.round((sentDocs / totalDocs) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-screen bg-slate-900">
       <header className="bg-slate-800 text-white sticky top-0 z-40">
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -302,17 +302,17 @@ export default function PortalClienteDashboard() {
                         return (
                           <div
                             key={doc.id}
-                            className="flex items-center justify-between p-3 rounded-lg border bg-white dark:bg-slate-800"
+                            className="flex items-center justify-between p-3 rounded-lg border border-slate-700 bg-slate-800/60"
                             data-testid={`portal-doc-${doc.id}`}
                           >
                             <div className="flex-1 min-w-0 mr-3">
-                              <p className="text-sm font-medium truncate">{doc.nomeDocumento || doc.tipoDocumento}</p>
+                              <p className="text-sm font-medium truncate text-slate-100">{doc.nomeDocumento || doc.tipoDocumento}</p>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <Badge variant={statusConf.variant} className="text-[10px]">{statusConf.label}</Badge>
                                 {doc.obrigatorio && <span className="text-[10px] text-red-500">Obrigatório</span>}
                               </div>
                               {doc.status === "rejeitado" && doc.observacao && (
-                                <p className="text-xs text-red-600 dark:text-red-400 mt-1" data-testid={`text-rejection-reason-${doc.id}`}>
+                                <p className="text-xs text-red-400 mt-1" data-testid={`text-rejection-reason-${doc.id}`}>
                                   {doc.observacao}
                                 </p>
                               )}
@@ -382,7 +382,7 @@ export default function PortalClienteDashboard() {
                   {cnpjLoading && <Loader2 className="w-4 h-4 animate-spin self-center" />}
                 </div>
                 {cnpjData && (
-                  <div className="text-xs bg-green-50 dark:bg-green-950/30 p-2 rounded border border-green-200 space-y-0.5" data-testid="cnpj-autofill-result">
+                  <div className="text-xs bg-green-950/30 p-2 rounded border border-green-700 text-green-300 space-y-0.5" data-testid="cnpj-autofill-result">
                     <p className="font-medium">{cnpjData.company?.name || cnpjData.alias || "—"}</p>
                     {cnpjData.address && (
                       <p className="text-muted-foreground">
@@ -408,7 +408,7 @@ export default function PortalClienteDashboard() {
                   {cepLoading && <Loader2 className="w-4 h-4 animate-spin self-center" />}
                 </div>
                 {cepData && (
-                  <div className="text-xs bg-green-50 dark:bg-green-950/30 p-2 rounded border border-green-200 space-y-0.5" data-testid="cep-autofill-result">
+                  <div className="text-xs bg-green-950/30 p-2 rounded border border-green-700 text-green-300 space-y-0.5" data-testid="cep-autofill-result">
                     <p className="font-medium flex items-center gap-1">
                       <MapPin className="w-3 h-3" /> {cepData.logradouro}
                     </p>
@@ -433,7 +433,7 @@ export default function PortalClienteDashboard() {
 
       {previewUrl && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl max-w-md w-full overflow-hidden">
+          <div className="bg-slate-800 rounded-xl max-w-md w-full overflow-hidden">
             <div className="p-3 border-b flex items-center justify-between">
               <span className="text-sm font-medium">Confirmar Envio</span>
               <Button variant="ghost" size="sm" onClick={cancelPreview}>
