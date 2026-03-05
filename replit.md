@@ -92,6 +92,7 @@ shared/
 - T006: CPF pré-populado no link do portal (?cpf=)
 - T007: Checklists por tipo de operação (Agro, Capital de Giro, Imóvel, Home Equity)
 - T008: Timeline de próximos passos após envio do formulário
+- Portal Clientes admin simplificado: removida aba Formulários (redundante), mantido geração de acesso + lista de clientes enriquecida com status do formulário, etapa da operação, e busca
 
 ## Notes
 - The Notion integration was not used (user dismissed it). If needed in the future, can be set up via Replit integrations or manual API token.

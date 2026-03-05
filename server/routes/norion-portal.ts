@@ -427,7 +427,44 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
       const orgId = getOrgId();
       const clients = await db.select().from(norionClientUsers)
         .where(eq(norionClientUsers.orgId, orgId));
-      res.json(clients);
+
+      const enriched = [];
+      for (const c of clients) {
+        let formularioStatus: string | null = null;
+        let formularioId: number | null = null;
+        let operationStage: string | null = null;
+        let companyName: string | null = null;
+
+        const [form] = await db.select().from(norionFormularioCliente)
+          .where(eq(norionFormularioCliente.clientUserId, c.id));
+        if (form) {
+          formularioStatus = form.status;
+          formularioId = form.id;
+        }
+
+        if (c.operationId) {
+          const [op] = await db.select().from(norionOperations)
+            .where(eq(norionOperations.id, c.operationId));
+          if (op) {
+            operationStage = op.stage;
+            if (op.companyId) {
+              const [comp] = await db.select().from(companies)
+                .where(eq(companies.id, op.companyId));
+              if (comp) companyName = (comp as any).legalName || (comp as any).tradeName || null;
+            }
+          }
+        }
+
+        enriched.push({
+          ...c,
+          formularioStatus,
+          formularioId,
+          operationStage,
+          companyName,
+        });
+      }
+
+      res.json(enriched);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
