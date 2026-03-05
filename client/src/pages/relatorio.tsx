@@ -119,7 +119,7 @@ export default function NorionRelatorioPage() {
                       <TableCell className="text-center">{l.percentualComissao}%</TableCell>
                       <TableCell className="text-right font-medium">{formatBRL(l.valorComissao)}</TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className={cn("text-xs", l.comissaoRecebida ? "bg-green-50 text-green-700 border-green-300" : "bg-amber-50 text-amber-700 border-amber-300")}>
+                        <Badge variant="outline" className={cn("text-xs", l.comissaoRecebida ? "bg-green-900/30 text-green-400 border-green-700" : "bg-amber-900/30 text-amber-400 border-amber-700")}>
                           {l.comissaoRecebida ? "Recebida" : "Pendente"}
                         </Badge>
                       </TableCell>

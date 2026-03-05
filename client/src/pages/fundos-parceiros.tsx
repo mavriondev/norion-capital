@@ -60,7 +60,7 @@ function OperacoesMatchingSection() {
   if (pendingOps.length === 0) return null;
 
   return (
-    <Card className="border-amber-200/50 bg-amber-50/30 dark:bg-amber-950/10 dark:border-amber-800/30">
+    <Card className="border-amber-800/30 bg-amber-900/20">
       <CardHeader className="pb-3 cursor-pointer" onClick={() => setExpanded(!expanded)} data-testid="toggle-matching-section">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">

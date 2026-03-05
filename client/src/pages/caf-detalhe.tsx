@@ -39,8 +39,8 @@ function formatCurrency(v: number) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  if (status === "ativo") return <Badge className="bg-green-100 text-green-700 border-green-300"><CheckCircle className="w-3 h-3 mr-1" />Ativo</Badge>;
-  if (status === "vencido") return <Badge className="bg-red-100 text-red-700 border-red-300"><XCircle className="w-3 h-3 mr-1" />Vencido</Badge>;
+  if (status === "ativo") return <Badge className="bg-green-900/30 text-green-400 border-green-700"><CheckCircle className="w-3 h-3 mr-1" />Ativo</Badge>;
+  if (status === "vencido") return <Badge className="bg-red-900/30 text-red-400 border-red-700"><XCircle className="w-3 h-3 mr-1" />Vencido</Badge>;
   return <Badge variant="outline"><AlertTriangle className="w-3 h-3 mr-1" />Pendente</Badge>;
 }
 
@@ -89,8 +89,8 @@ export default function CafDetalhePage() {
           <Button variant="ghost" size="sm" onClick={() => setLocation("/caf")} data-testid="button-voltar-caf">
             <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
           </Button>
-          <div className="p-2 bg-green-100 rounded-lg">
-            <Leaf className="w-6 h-6 text-green-700" />
+          <div className="p-2 bg-green-900/30 rounded-lg">
+            <Leaf className="w-6 h-6 text-green-400" />
           </div>
           <div>
             <h1 className="text-2xl font-bold" data-testid="title-caf-detalhe">{registro.nomeTitular}</h1>
@@ -274,7 +274,7 @@ function DetailView({ registro, onEdit }: { registro: NorionCafRegistro; onEdit:
           <CardContent>
             <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
               {pronafLinhas.map((l: any) => (
-                <div key={l.id} className="border rounded-md p-2.5 text-xs hover:bg-green-50/50" data-testid={`pronaf-linha-${l.id}`}>
+                <div key={l.id} className="border rounded-md p-2.5 text-xs hover:bg-green-900/20" data-testid={`pronaf-linha-${l.id}`}>
                   <div className="font-medium">{l.nome}</div>
                   <div className="flex items-center gap-3 mt-1 text-muted-foreground">
                     <span>Taxa: {l.taxa}% a.a.</span>
@@ -378,7 +378,7 @@ function EditForm({ registro, onCancel, onSaved }: { registro: NorionCafRegistro
         <CardTitle className="text-base">Editar Registro</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3 border rounded-lg p-4 bg-green-50/30">
+        <div className="space-y-3 border rounded-lg p-4 bg-green-900/20">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">Nome Titular</Label>

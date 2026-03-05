@@ -18,16 +18,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 function ProfileBadge({ profile }: { profile: string | null | undefined }) {
   const p = (profile || "baixo").toLowerCase();
   const colors: Record<string, string> = {
-    alto: "bg-green-100 text-green-700 border-green-300",
-    medio: "bg-amber-100 text-amber-700 border-amber-300",
-    baixo: "bg-slate-100 text-slate-600 border-slate-300",
+    alto: "bg-green-900/30 text-green-400 border-green-700",
+    medio: "bg-amber-900/30 text-amber-400 border-amber-700",
+    baixo: "bg-slate-800/40 text-slate-400 border-slate-600",
   };
   return <Badge variant="outline" className={cn("text-xs", colors[p] || colors.baixo)}>{p.charAt(0).toUpperCase() + p.slice(1)}</Badge>;
 }
 
 function ScoreBadge({ score }: { score: number | null | undefined }) {
   const s = score || 0;
-  const color = s > 65 ? "text-green-700 bg-green-100 border-green-300" : s >= 35 ? "text-amber-700 bg-amber-100 border-amber-300" : "text-red-600 bg-red-50 border-red-200";
+  const color = s > 65 ? "text-green-400 bg-green-900/30 border-green-700" : s >= 35 ? "text-amber-400 bg-amber-900/30 border-amber-700" : "text-red-400 bg-red-900/30 border-red-700";
   return <Badge variant="outline" className={cn("text-xs font-bold", color)}>{s}/100</Badge>;
 }
 
@@ -93,7 +93,7 @@ function ScoreBar({ score, breakdown }: { score: number; breakdown?: any[] }) {
             <span className="text-sm font-medium">Score de Perfil</span>
             <ScoreBadge score={score} />
           </div>
-          <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+          <div className="w-full bg-slate-800/40 rounded-full h-3 overflow-hidden">
             <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${Math.min(score, 100)}%` }} data-testid="score-bar" />
           </div>
         </div>
@@ -103,11 +103,11 @@ function ScoreBar({ score, breakdown }: { score: number; breakdown?: any[] }) {
           <p className="text-xs font-medium text-muted-foreground">Composição do Score</p>
           <div className="grid grid-cols-1 gap-1">
             {breakdown.map((b: any, i: number) => (
-              <div key={i} className="flex items-center justify-between text-xs px-2 py-1 bg-slate-50 rounded">
+              <div key={i} className="flex items-center justify-between text-xs px-2 py-1 bg-slate-800/40 rounded">
                 <span>{b.factor}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">{b.detail}</span>
-                  <Badge variant="outline" className={cn("text-[10px] px-1", b.points > 0 ? "text-green-700 bg-green-50" : "text-red-600 bg-red-50")}>
+                  <Badge variant="outline" className={cn("text-[10px] px-1", b.points > 0 ? "text-green-400 bg-green-900/30" : "text-red-400 bg-red-900/30")}>
                     {b.points > 0 ? "+" : ""}{b.points}
                   </Badge>
                 </div>
@@ -170,7 +170,7 @@ function TabVisaoGeral({ company, sources }: { company: any; sources: any[] }) {
           <div>
             <p className="text-xs text-muted-foreground">Situação Cadastral</p>
             <div className="flex items-center gap-1.5 mt-0.5">
-              {cnpjData.situacaoCadastral.toUpperCase().includes("ATIVA") ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" /> : <AlertCircle className="w-3.5 h-3.5 text-red-500" />}
+              {cnpjData.situacaoCadastral.toUpperCase().includes("ATIVA") ? <CheckCircle2 className="w-3.5 h-3.5 text-green-400" /> : <AlertCircle className="w-3.5 h-3.5 text-red-400" />}
               <p className="text-sm" data-testid="text-situacao">{cnpjData.situacaoCadastral}</p>
             </div>
           </div>
@@ -237,8 +237,8 @@ function TabVisaoGeral({ company, sources }: { company: any; sources: any[] }) {
             const found = sources.find(s => s.dataType === src);
             const labels: Record<string, string> = { brasilapi: "Receita Federal", dap_caf: "DAP/CAF", sicor: "SICOR/BCB", ibge: "IBGE" };
             return (
-              <div key={src} className="flex items-center gap-2 text-xs px-2 py-1.5 bg-slate-50 rounded">
-                {found ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" /> : <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+              <div key={src} className="flex items-center gap-2 text-xs px-2 py-1.5 bg-slate-800/40 rounded">
+                {found ? <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0" /> : <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
                 <span className="flex-1">{labels[src] || src}</span>
                 {found && <span className="text-muted-foreground">{formatDate(found.updatedAt || found.createdAt)}</span>}
               </div>
@@ -324,16 +324,16 @@ function TabQSA({ company, sources }: { company: any; sources: any[] }) {
                   </div>
                   <div className="flex items-center gap-1.5">
                     {s.temDAP && (
-                      <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
+                      <Badge variant="outline" className="text-xs bg-green-900/30 text-green-400 border-green-700">
                         <Leaf className="w-3 h-3 mr-0.5" /> DAP
                       </Badge>
                     )}
                     {contato?.verificado ? (
-                      <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
+                      <Badge variant="outline" className="text-xs bg-green-900/30 text-green-400 border-green-700">
                         <Check className="w-3 h-3 mr-0.5" /> Verificado
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-xs bg-slate-50 text-slate-400">Pendente</Badge>
+                      <Badge variant="outline" className="text-xs bg-slate-800/40 text-slate-400">Pendente</Badge>
                     )}
                     <Button variant="ghost" size="icon" onClick={() => isEditing ? setEditingKey(null) : startEdit(key)} data-testid={`button-edit-socio-${idx}`}>
                       <Edit2 className="w-3 h-3" />
@@ -442,7 +442,7 @@ function TabCAF({ company, sources }: { company: any; sources: any[] }) {
       {!editing && !formData.numeroCAF ? (
         <p className="text-xs text-muted-foreground italic">Nenhum dado CAF registrado. Clique em "Editar" para adicionar ou "Atualizar" para consultar.</p>
       ) : editing ? (
-        <div className="space-y-3 bg-green-50/50 border border-green-100 rounded-md p-3">
+        <div className="space-y-3 bg-green-900/20 border border-green-800 rounded-md p-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1"><Label className="text-xs">Número CAF/DAP</Label><Input className="text-sm" value={formData.numeroCAF} onChange={(e) => setFormData(p => ({ ...p, numeroCAF: e.target.value }))} data-testid="input-caf-numero" /></div>
             <div className="space-y-1">
@@ -462,7 +462,7 @@ function TabCAF({ company, sources }: { company: any; sources: any[] }) {
           <div className="space-y-1"><Label className="text-xs">Renda Bruta Anual (R$)</Label><Input type="number" className="text-sm" value={formData.rendaBrutaAnual} onChange={(e) => setFormData(p => ({ ...p, rendaBrutaAnual: e.target.value }))} /></div>
         </div>
       ) : (
-        <div className="bg-green-50/50 border border-green-100 rounded-md p-3 space-y-2">
+        <div className="bg-green-900/20 border border-green-800 rounded-md p-3 space-y-2">
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div><p className="text-xs text-muted-foreground">Nº CAF/DAP</p><p className="font-medium" data-testid="text-caf-numero">{formData.numeroCAF}</p></div>
             <div><p className="text-xs text-muted-foreground">Grupo</p><p className="font-medium" data-testid="text-caf-grupo">{formData.grupo || "\u2014"}</p></div>
@@ -497,14 +497,14 @@ function TabSICOR({ company, sources }: { company: any; sources: any[] }) {
       </div>
 
       {data ? (
-        <div className="bg-amber-50/50 border border-amber-100 rounded-md p-3 space-y-3">
+        <div className="bg-amber-900/20 border border-amber-800 rounded-md p-3 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div className="text-center p-2 bg-white rounded-md border">
-              <p className="text-lg font-bold text-amber-700" data-testid="text-sicor-contratos">{(data.totalContratos || 0).toLocaleString("pt-BR")}</p>
+            <div className="text-center p-2 bg-slate-800/60 rounded-md border">
+              <p className="text-lg font-bold text-amber-400" data-testid="text-sicor-contratos">{(data.totalContratos || 0).toLocaleString("pt-BR")}</p>
               <p className="text-xs text-muted-foreground">Contratos PRONAF</p>
             </div>
-            <div className="text-center p-2 bg-white rounded-md border">
-              <p className="text-lg font-bold text-amber-700" data-testid="text-sicor-valor">{formatBRL(data.totalValor)}</p>
+            <div className="text-center p-2 bg-slate-800/60 rounded-md border">
+              <p className="text-lg font-bold text-amber-400" data-testid="text-sicor-valor">{formatBRL(data.totalValor)}</p>
               <p className="text-xs text-muted-foreground">Volume Total</p>
             </div>
           </div>
@@ -522,11 +522,11 @@ function TabSICOR({ company, sources }: { company: any; sources: any[] }) {
             </div>
           )}
           {data.totalContratos > 100 ? (
-            <Badge className="bg-green-100 text-green-700 border-green-300 text-xs">Alta atividade PRONAF</Badge>
+            <Badge className="bg-green-900/30 text-green-400 border-green-700 text-xs">Alta atividade PRONAF</Badge>
           ) : data.totalContratos > 10 ? (
-            <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">Atividade PRONAF moderada</Badge>
+            <Badge className="bg-amber-900/30 text-amber-400 border-amber-700 text-xs">Atividade PRONAF moderada</Badge>
           ) : (
-            <Badge className="bg-slate-100 text-slate-500 border-slate-300 text-xs">Baixa atividade PRONAF</Badge>
+            <Badge className="bg-slate-800/40 text-slate-400 border-slate-600 text-xs">Baixa atividade PRONAF</Badge>
           )}
         </div>
       ) : (
@@ -556,7 +556,7 @@ function TabIBGE({ company, sources }: { company: any; sources: any[] }) {
       </div>
 
       {data ? (
-        <div className="bg-blue-50/50 border border-blue-100 rounded-md p-3 space-y-3">
+        <div className="bg-blue-900/20 border border-blue-800 rounded-md p-3 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             {data.nome && (
               <div className="col-span-2">
@@ -565,26 +565,26 @@ function TabIBGE({ company, sources }: { company: any; sources: any[] }) {
               </div>
             )}
             {data.populacao != null && (
-              <div className="text-center p-2 bg-white rounded-md border">
-                <p className="text-lg font-bold text-blue-700" data-testid="text-ibge-populacao">{data.populacao?.toLocaleString("pt-BR")}</p>
+              <div className="text-center p-2 bg-slate-800/60 rounded-md border">
+                <p className="text-lg font-bold text-blue-400" data-testid="text-ibge-populacao">{data.populacao?.toLocaleString("pt-BR")}</p>
                 <p className="text-xs text-muted-foreground">População</p>
               </div>
             )}
             {data.area != null && (
-              <div className="text-center p-2 bg-white rounded-md border">
-                <p className="text-lg font-bold text-blue-700" data-testid="text-ibge-area">{data.area?.toLocaleString("pt-BR")} km²</p>
+              <div className="text-center p-2 bg-slate-800/60 rounded-md border">
+                <p className="text-lg font-bold text-blue-400" data-testid="text-ibge-area">{data.area?.toLocaleString("pt-BR")} km²</p>
                 <p className="text-xs text-muted-foreground">Área</p>
               </div>
             )}
             {data.pib != null && (
-              <div className="text-center p-2 bg-white rounded-md border">
-                <p className="text-lg font-bold text-blue-700">{formatBRL(data.pib)}</p>
+              <div className="text-center p-2 bg-slate-800/60 rounded-md border">
+                <p className="text-lg font-bold text-blue-400">{formatBRL(data.pib)}</p>
                 <p className="text-xs text-muted-foreground">PIB</p>
               </div>
             )}
             {data.regiao && (
-              <div className="text-center p-2 bg-white rounded-md border">
-                <p className="text-lg font-bold text-blue-700">{data.regiao}</p>
+              <div className="text-center p-2 bg-slate-800/60 rounded-md border">
+                <p className="text-lg font-bold text-blue-400">{data.regiao}</p>
                 <p className="text-xs text-muted-foreground">Região</p>
               </div>
             )}
@@ -615,11 +615,11 @@ function TabOperacoes({ company }: { company: any }) {
   };
 
   const stageColors: Record<string, string> = {
-    identificado: "bg-slate-100 text-slate-600", diagnostico: "bg-blue-100 text-blue-700",
-    documentacao: "bg-amber-100 text-amber-700", analise: "bg-purple-100 text-purple-700",
-    comite: "bg-cyan-100 text-cyan-700", aprovado: "bg-green-100 text-green-700",
-    contratado: "bg-emerald-100 text-emerald-700", finalizado: "bg-teal-100 text-teal-700",
-    cancelado: "bg-red-100 text-red-600",
+    identificado: "bg-slate-800/40 text-slate-400", diagnostico: "bg-blue-900/30 text-blue-400",
+    documentacao: "bg-amber-900/30 text-amber-400", analise: "bg-purple-900/30 text-purple-400",
+    comite: "bg-cyan-900/30 text-cyan-400", aprovado: "bg-green-900/30 text-green-400",
+    contratado: "bg-emerald-900/30 text-emerald-400", finalizado: "bg-teal-900/30 text-teal-400",
+    cancelado: "bg-red-900/30 text-red-400",
   };
 
   return (
@@ -646,14 +646,14 @@ function TabOperacoes({ company }: { company: any }) {
             return (
               <div
                 key={op.id}
-                className="border rounded-md p-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                className="border rounded-md p-3 cursor-pointer hover:bg-slate-700/40 transition-colors"
                 onClick={() => navigate(`/operacoes/${op.id}`)}
                 data-testid={`operation-card-${op.id}`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <Badge className={cn("text-xs", stageColors[op.stage] || "bg-slate-100 text-slate-600")}>
+                      <Badge className={cn("text-xs", stageColors[op.stage] || "bg-slate-800/40 text-slate-400")}>
                         {stageLabels[op.stage] || op.stage}
                       </Badge>
                       {diag.finalidade && <span className="text-xs text-muted-foreground">{diag.finalidade}</span>}

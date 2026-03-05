@@ -79,8 +79,8 @@ export default function CafImportarPage() {
         <Button variant="ghost" size="sm" onClick={() => setLocation("/caf")} data-testid="button-voltar-caf">
           <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
         </Button>
-        <div className="p-2 bg-green-100 rounded-lg">
-          <Upload className="w-6 h-6 text-green-700" />
+        <div className="p-2 bg-green-900/30 rounded-lg">
+          <Upload className="w-6 h-6 text-green-400" />
         </div>
         <div>
           <h1 className="text-2xl font-bold" data-testid="title-caf-importar">Importar CSV</h1>

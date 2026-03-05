@@ -69,8 +69,8 @@ export default function CafSicorPage() {
         <Button variant="ghost" size="sm" onClick={() => setLocation("/caf")} data-testid="button-voltar-caf">
           <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
         </Button>
-        <div className="p-2 bg-blue-100 rounded-lg">
-          <Database className="w-6 h-6 text-blue-700" />
+        <div className="p-2 bg-blue-900/30 rounded-lg">
+          <Database className="w-6 h-6 text-blue-400" />
         </div>
         <div>
           <h1 className="text-2xl font-bold" data-testid="title-caf-sicor">SICOR / BCB — Crédito Rural PRONAF</h1>
@@ -123,7 +123,7 @@ export default function CafSicorPage() {
           </div>
 
           {isError && (
-            <div className="border border-red-200 bg-red-50 rounded-lg p-3 text-sm text-red-700 flex items-center gap-2" data-testid="sicor-error">
+            <div className="border border-red-700 bg-red-900/30 rounded-lg p-3 text-sm text-red-400 flex items-center gap-2" data-testid="sicor-error">
               <AlertTriangle className="w-4 h-4" />
               A API do Banco Central pode estar instável. Tente novamente em alguns segundos.
             </div>
@@ -244,7 +244,7 @@ export default function CafSicorPage() {
           )}
 
           {!consultaAtiva && !resultado && (
-            <div className="text-center py-8 text-sm text-muted-foreground border rounded-lg bg-slate-50/50">
+            <div className="text-center py-8 text-sm text-muted-foreground border rounded-lg bg-slate-800/40">
               <Database className="w-8 h-8 mx-auto mb-2 text-blue-300" />
               <p>Selecione os filtros e clique em "Consultar" para buscar dados de crédito rural PRONAF</p>
               <p className="text-xs mt-1">Fonte: SICOR — Banco Central do Brasil</p>

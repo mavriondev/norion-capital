@@ -66,8 +66,8 @@ export default function CafConsultarPage() {
         <Button variant="ghost" size="sm" onClick={() => setLocation("/caf")} data-testid="button-voltar-caf">
           <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
         </Button>
-        <div className="p-2 bg-green-100 rounded-lg">
-          <Search className="w-6 h-6 text-green-700" />
+        <div className="p-2 bg-green-900/30 rounded-lg">
+          <Search className="w-6 h-6 text-green-400" />
         </div>
         <div>
           <h1 className="text-2xl font-bold" data-testid="title-caf-consultar">Consultar Agricultor</h1>
@@ -131,9 +131,9 @@ export default function CafConsultarPage() {
           <CardContent className="space-y-4">
             {!resultado.encontrado && (
               <div className="space-y-3">
-                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                  <div className="text-sm text-amber-700 dark:text-amber-400">
+                <div className="flex items-start gap-2 p-3 bg-amber-900/20 rounded-lg border border-amber-800">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                  <div className="text-sm text-amber-400">
                     <p className="font-medium">Nenhum registro encontrado</p>
                     <p className="text-xs mt-1">{resultado.mensagem}</p>
                   </div>
@@ -151,9 +151,9 @@ export default function CafConsultarPage() {
 
             {resultado.encontrado && resultado.fonte === "portal_dap" && (
               <div className="space-y-3">
-                <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <AlertTriangle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                  <div className="text-sm text-blue-700 dark:text-blue-400">
+                <div className="flex items-start gap-2 p-3 bg-blue-900/20 rounded-lg border border-blue-800">
+                  <AlertTriangle className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                  <div className="text-sm text-blue-400">
                     <p className="font-medium">Registro encontrado no Portal DAP</p>
                     <p className="text-xs mt-1">{resultado.mensagem}</p>
                   </div>
@@ -188,7 +188,7 @@ export default function CafConsultarPage() {
                   <div><p className="text-xs text-muted-foreground">Atividade Principal</p><p className="text-sm">{resultado.dados.atividadePrincipal || "—"}</p></div>
                   <div>
                     <p className="text-xs text-muted-foreground">Status</p>
-                    <Badge variant="outline" className={resultado.dados.status === "ativo" ? "bg-green-100 text-green-700 border-green-300" : "bg-red-100 text-red-700 border-red-300"}>
+                    <Badge variant="outline" className={resultado.dados.status === "ativo" ? "bg-green-900/30 text-green-400 border-green-700" : "bg-red-900/30 text-red-400 border-red-700"}>
                       {resultado.dados.status === "ativo" ? "Ativo" : "Vencido"}
                     </Badge>
                   </div>

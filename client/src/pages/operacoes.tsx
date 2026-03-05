@@ -21,12 +21,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 
 const STAGES = [
-  { key: "identificado", label: "Identificado", icon: Search, color: "bg-slate-100 dark:bg-slate-800 border-slate-300" },
-  { key: "diagnostico", label: "Diagnóstico", icon: FileSearch, color: "bg-blue-50 dark:bg-blue-950 border-blue-300" },
-  { key: "enviado_fundos", label: "Enviado aos Fundos", icon: Send, color: "bg-indigo-50 dark:bg-indigo-950 border-indigo-300" },
-  { key: "em_analise", label: "Em Análise", icon: Clock, color: "bg-amber-50 dark:bg-amber-950 border-amber-300" },
-  { key: "aprovado", label: "Aprovado", icon: CheckCircle2, color: "bg-green-50 dark:bg-green-950 border-green-300" },
-  { key: "comissao_gerada", label: "Comissão Gerada", icon: BadgeDollarSign, color: "bg-emerald-50 dark:bg-emerald-950 border-emerald-300" },
+  { key: "identificado", label: "Identificado", icon: Search, color: "bg-slate-800/40 border-slate-600" },
+  { key: "diagnostico", label: "Diagnóstico", icon: FileSearch, color: "bg-blue-900/30 border-blue-700" },
+  { key: "enviado_fundos", label: "Enviado aos Fundos", icon: Send, color: "bg-indigo-900/30 border-indigo-700" },
+  { key: "em_analise", label: "Em Análise", icon: Clock, color: "bg-amber-900/30 border-amber-700" },
+  { key: "aprovado", label: "Aprovado", icon: CheckCircle2, color: "bg-green-900/30 border-green-700" },
+  { key: "comissao_gerada", label: "Comissão Gerada", icon: BadgeDollarSign, color: "bg-emerald-900/30 border-emerald-700" },
 ];
 
 const FINALIDADES = ["Capital de Giro", "Expansão", "Equipamentos", "Imóvel", "Agro", "Outro"];
@@ -42,12 +42,12 @@ function formatDate(dateStr: string | null | undefined) {
 }
 
 const STAGE_BADGE_COLORS: Record<string, string> = {
-  identificado: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  diagnostico: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  enviado_fundos: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300",
-  em_analise: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
-  aprovado: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-  comissao_gerada: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300",
+  identificado: "bg-slate-800/40 text-slate-300",
+  diagnostico: "bg-blue-900/30 text-blue-400",
+  enviado_fundos: "bg-indigo-900/30 text-indigo-400",
+  em_analise: "bg-amber-900/30 text-amber-400",
+  aprovado: "bg-green-900/30 text-green-400",
+  comissao_gerada: "bg-emerald-900/30 text-emerald-400",
 };
 
 function MatchBadge({ operationId }: { operationId: number }) {
@@ -69,9 +69,9 @@ function MatchBadge({ operationId }: { operationId: number }) {
   return (
     <div className="flex items-center gap-1" data-testid={`match-badge-${operationId}`}>
       <Badge variant="outline" className={cn("text-[10px] shrink-0",
-        best.score >= 80 ? "border-green-400 text-green-600" :
-        best.score >= 50 ? "border-amber-400 text-amber-600" :
-        "border-slate-300 text-slate-500"
+        best.score >= 80 ? "border-green-400 text-green-400" :
+        best.score >= 50 ? "border-amber-400 text-amber-400" :
+        "border-slate-600 text-slate-400"
       )}>
         <Star className="w-2.5 h-2.5 mr-0.5" />
         {best.score}%

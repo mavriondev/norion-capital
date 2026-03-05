@@ -24,9 +24,9 @@ const GARANTIAS = ["Imóvel", "Recebíveis", "Veículos", "Equipamentos", "Terra
 const FATURAMENTOS = ["Até R$500k", "R$500k a R$2M", "R$2M a R$10M", "Acima de R$10M"];
 
 const PROFILE_COLORS: Record<string, string> = {
-  alto: "bg-green-100 text-green-700 border-green-300",
-  medio: "bg-amber-100 text-amber-700 border-amber-300",
-  baixo: "bg-slate-100 text-slate-600 border-slate-300",
+  alto: "bg-green-900/30 text-green-400 border-green-700",
+  medio: "bg-amber-900/30 text-amber-400 border-amber-700",
+  baixo: "bg-slate-800/40 text-slate-400 border-slate-600",
 };
 
 function formatCnpj(value: string | null | undefined) {
@@ -92,7 +92,7 @@ function CompanyPickerDialog({ companies, onSelect, open, onOpenChange }: {
                     onClick={() => { onSelect(c); onOpenChange(false); setDialogSearch(""); }}
                     data-testid={`dialog-company-${c.id}`}
                   >
-                    <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-lg bg-slate-800/40 flex items-center justify-center shrink-0">
                       <Building2 className="w-4 h-4 text-muted-foreground" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -195,7 +195,7 @@ export default function OperacaoNovaPage() {
             <Label className="text-sm">Empresa</Label>
             {selectedCompany ? (
               <div className="flex items-center gap-2 mt-1 p-2.5 bg-muted/30 rounded-lg border">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-slate-800/40 flex items-center justify-center shrink-0">
                   <Building2 className="w-4 h-4 text-muted-foreground" />
                 </div>
                 <div className="flex-1 min-w-0">

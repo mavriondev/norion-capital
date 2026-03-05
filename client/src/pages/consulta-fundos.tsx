@@ -154,8 +154,8 @@ export default function NorionConsultaFundosPage() {
             )}
           </div>
           {!settingsData?.configured && (
-            <div className="border border-amber-200 rounded-md p-4 bg-amber-50/50">
-              <div className="flex items-center gap-2 text-amber-700"><AlertTriangle className="w-4 h-4" /><p className="text-sm font-medium">ANBIMA não configurada</p></div>
+            <div className="border border-amber-800 rounded-md p-4 bg-amber-900/20">
+              <div className="flex items-center gap-2 text-amber-400"><AlertTriangle className="w-4 h-4" /><p className="text-sm font-medium">ANBIMA não configurada</p></div>
               <p className="text-xs text-muted-foreground mt-1">Configure as credenciais na página de Configurações.</p>
             </div>
           )}

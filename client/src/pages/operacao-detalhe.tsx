@@ -25,12 +25,12 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 
 const STAGES = [
-  { key: "identificado", label: "Identificado", icon: Search, color: "bg-slate-100 dark:bg-slate-800 border-slate-300" },
-  { key: "diagnostico", label: "Diagnóstico", icon: FileSearch, color: "bg-blue-50 dark:bg-blue-950 border-blue-300" },
-  { key: "enviado_fundos", label: "Enviado aos Fundos", icon: Send, color: "bg-indigo-50 dark:bg-indigo-950 border-indigo-300" },
-  { key: "em_analise", label: "Em Análise", icon: Clock, color: "bg-amber-50 dark:bg-amber-950 border-amber-300" },
-  { key: "aprovado", label: "Aprovado", icon: CheckCircle2, color: "bg-green-50 dark:bg-green-950 border-green-300" },
-  { key: "comissao_gerada", label: "Comissão Gerada", icon: BadgeDollarSign, color: "bg-emerald-50 dark:bg-emerald-950 border-emerald-300" },
+  { key: "identificado", label: "Identificado", icon: Search, color: "bg-slate-800/40 border-slate-600" },
+  { key: "diagnostico", label: "Diagnóstico", icon: FileSearch, color: "bg-blue-900/30 border-blue-700" },
+  { key: "enviado_fundos", label: "Enviado aos Fundos", icon: Send, color: "bg-indigo-900/30 border-indigo-700" },
+  { key: "em_analise", label: "Em Análise", icon: Clock, color: "bg-amber-900/30 border-amber-700" },
+  { key: "aprovado", label: "Aprovado", icon: CheckCircle2, color: "bg-green-900/30 border-green-700" },
+  { key: "comissao_gerada", label: "Comissão Gerada", icon: BadgeDollarSign, color: "bg-emerald-900/30 border-emerald-700" },
 ];
 
 function formatBRL(value: number | null | undefined) {
@@ -44,12 +44,12 @@ function formatDate(dateStr: string | null | undefined) {
 }
 
 const STAGE_BADGE_COLORS: Record<string, string> = {
-  identificado: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  diagnostico: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  enviado_fundos: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300",
-  em_analise: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
-  aprovado: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-  comissao_gerada: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300",
+  identificado: "bg-slate-800/40 text-slate-300",
+  diagnostico: "bg-blue-900/30 text-blue-400",
+  enviado_fundos: "bg-indigo-900/30 text-indigo-400",
+  em_analise: "bg-amber-900/30 text-amber-400",
+  aprovado: "bg-green-900/30 text-green-400",
+  comissao_gerada: "bg-emerald-900/30 text-emerald-400",
 };
 
 const CATEGORIA_CONFIG: Record<string, { label: string; icon: any }> = {
@@ -61,7 +61,7 @@ const CATEGORIA_CONFIG: Record<string, { label: string; icon: any }> = {
 
 const STATUS_STYLES: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive"; className?: string }> = {
   pendente: { label: "Pendente", variant: "secondary" },
-  enviado: { label: "Enviado", variant: "outline", className: "border-blue-400 text-blue-600" },
+  enviado: { label: "Enviado", variant: "outline", className: "border-blue-400 text-blue-400" },
   aprovado: { label: "Aprovado", variant: "default", className: "bg-green-600" },
   rejeitado: { label: "Rejeitado", variant: "destructive" },
 };
@@ -167,7 +167,7 @@ function DocumentChecklist({ operationId }: { operationId: number }) {
         </div>
         <Progress value={progressPercent} className="h-2" />
         {progress && progress.obrigatoriosConcluidos < progress.obrigatorios && (
-          <p className="text-xs text-amber-600">{progress.obrigatorios - progress.obrigatoriosConcluidos} obrigatório(s) pendente(s)</p>
+          <p className="text-xs text-amber-400">{progress.obrigatorios - progress.obrigatoriosConcluidos} obrigatório(s) pendente(s)</p>
         )}
       </div>
       {["pessoal", "imovel", "renda", "briefing"].map(cat => {
@@ -217,12 +217,12 @@ function DocumentChecklist({ operationId }: { operationId: number }) {
                           </Button>
                         )}
                         {doc.status !== "aprovado" && (
-                          <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600" onClick={() => updateDocMutation.mutate({ docId: doc.id, data: { status: "aprovado" } })}>
+                          <Button variant="ghost" size="sm" className="h-7 text-xs text-green-400" onClick={() => updateDocMutation.mutate({ docId: doc.id, data: { status: "aprovado" } })}>
                             <Check className="w-3 h-3 mr-1" /> Aprovar
                           </Button>
                         )}
                         {doc.status !== "rejeitado" && doc.status !== "pendente" && (
-                          <Button variant="ghost" size="sm" className="h-7 text-xs text-red-500" onClick={() => updateDocMutation.mutate({ docId: doc.id, data: { status: "rejeitado" } })}>
+                          <Button variant="ghost" size="sm" className="h-7 text-xs text-red-400" onClick={() => updateDocMutation.mutate({ docId: doc.id, data: { status: "rejeitado" } })}>
                             <XCircle className="w-3 h-3 mr-1" /> Rejeitar
                           </Button>
                         )}
@@ -306,10 +306,10 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">{envio.fundoParceiro?.nome || "Fundo"}</span>
                 <Badge variant="outline" className={cn("text-xs",
-                  envio.status === "aprovado" ? "border-green-400 text-green-600" :
-                  envio.status === "recusado" ? "border-red-400 text-red-600" :
-                  envio.status === "em_analise" ? "border-amber-400 text-amber-600" :
-                  "border-blue-400 text-blue-600"
+                  envio.status === "aprovado" ? "border-green-400 text-green-400" :
+                  envio.status === "recusado" ? "border-red-400 text-red-400" :
+                  envio.status === "em_analise" ? "border-amber-400 text-amber-400" :
+                  "border-blue-400 text-blue-400"
                 )}>
                   {envio.status === "enviado" ? "Enviado" : envio.status === "em_analise" ? "Em Análise" : envio.status === "aprovado" ? "Aprovado" : envio.status === "recusado" ? "Recusado" : envio.status}
                 </Badge>
@@ -384,9 +384,9 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium truncate">{m.fundo.nome}</span>
                   <Badge variant="outline" className={cn("text-[10px] shrink-0",
-                    m.score >= 80 ? "border-green-400 text-green-600 bg-green-50" :
-                    m.score >= 50 ? "border-amber-400 text-amber-600 bg-amber-50" :
-                    "border-slate-300 text-slate-500"
+                    m.score >= 80 ? "border-green-400 text-green-400 bg-green-900/30" :
+                    m.score >= 50 ? "border-amber-400 text-amber-400 bg-amber-900/30" :
+                    "border-slate-600 text-slate-400"
                   )}>
                     <Star className="w-2.5 h-2.5 mr-0.5" />
                     {m.score}%
@@ -618,9 +618,9 @@ function DefesaCreditoSection({ operationId, diagnostico, company, onSave }: {
 
         {hasCaf && (
           <TabsContent value="pronaf" className="space-y-3 mt-3" data-testid="tab-pronaf-content">
-            <div className="bg-green-50/50 border border-green-100 rounded-lg p-3 space-y-2">
+            <div className="bg-green-900/20 border border-green-800 rounded-lg p-3 space-y-2">
               <div className="flex items-center gap-2">
-                <Leaf className="w-4 h-4 text-green-600" />
+                <Leaf className="w-4 h-4 text-green-400" />
                 <span className="text-sm font-medium">Dados do CAF</span>
               </div>
               <div className="grid grid-cols-3 gap-2 text-sm">
@@ -644,7 +644,7 @@ function DefesaCreditoSection({ operationId, diagnostico, company, onSave }: {
                       key={l.id}
                       className={cn(
                         "border rounded-lg p-2.5 cursor-pointer transition-colors",
-                        pronafSelecionadas.includes(l.id) ? "border-green-400 bg-green-50" : "hover:bg-muted/30"
+                        pronafSelecionadas.includes(l.id) ? "border-green-400 bg-green-900/30" : "hover:bg-muted/30"
                       )}
                       onClick={() => togglePronafLinha(l.id)}
                       data-testid={`pronaf-linha-${l.id}`}
@@ -666,7 +666,7 @@ function DefesaCreditoSection({ operationId, diagnostico, company, onSave }: {
                 </div>
               )}
               {pronafSelecionadas.length > 0 && (
-                <p className="text-xs text-green-700 mt-2">{pronafSelecionadas.length} linha(s) selecionada(s) para o dossiê</p>
+                <p className="text-xs text-green-400 mt-2">{pronafSelecionadas.length} linha(s) selecionada(s) para o dossiê</p>
               )}
             </div>
           </TabsContent>
@@ -838,10 +838,10 @@ function FormularioClienteSection({ operationId }: { operationId: number }) {
   }
 
   const STATUS_MAP: Record<string, { label: string; color: string }> = {
-    rascunho: { label: "Rascunho", color: "bg-slate-100 text-slate-600" },
-    enviado: { label: "Enviado", color: "bg-blue-100 text-blue-700" },
-    em_revisao: { label: "Em Revisão", color: "bg-amber-100 text-amber-700" },
-    aprovado: { label: "Aprovado", color: "bg-green-100 text-green-700" },
+    rascunho: { label: "Rascunho", color: "bg-slate-800/40 text-slate-300" },
+    enviado: { label: "Enviado", color: "bg-blue-900/30 text-blue-400" },
+    em_revisao: { label: "Em Revisão", color: "bg-amber-900/30 text-amber-400" },
+    aprovado: { label: "Aprovado", color: "bg-green-900/30 text-green-400" },
   };
   const st = STATUS_MAP[formulario.status] || STATUS_MAP.rascunho;
 
@@ -888,7 +888,7 @@ function FormularioClienteSection({ operationId }: { operationId: number }) {
                 <div className="flex items-center gap-1">
                   <Badge variant={doc.status === "aprovado" ? "default" : doc.status === "rejeitado" ? "destructive" : "secondary"} className="text-[9px] h-4">{doc.status}</Badge>
                   {doc.driveFileUrl && (
-                    <a href={doc.driveFileUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-700">
+                    <a href={doc.driveFileUrl} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300">
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   )}
@@ -904,14 +904,14 @@ function FormularioClienteSection({ operationId }: { operationId: number }) {
           <Button size="sm" className="text-xs bg-green-600 hover:bg-green-700 text-white" onClick={() => aprovarMutation.mutate()} disabled={aprovarMutation.isPending} data-testid="button-aprovar-formulario">
             <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Aprovar
           </Button>
-          <Button size="sm" variant="outline" className="text-xs text-amber-600 border-amber-300" onClick={() => setShowRevisao(!showRevisao)} data-testid="button-pedir-revisao">
+          <Button size="sm" variant="outline" className="text-xs text-amber-400 border-amber-700" onClick={() => setShowRevisao(!showRevisao)} data-testid="button-pedir-revisao">
             <AlertTriangle className="w-3.5 h-3.5 mr-1" /> Pedir Revisão
           </Button>
         </div>
       )}
 
       {showRevisao && (
-        <div className="space-y-2 p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/20">
+        <div className="space-y-2 p-3 border rounded-lg bg-amber-900/20">
           <Label className="text-xs">Motivo da revisão</Label>
           <Textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} placeholder="Descreva o que precisa ser corrigido..." rows={2} className="text-xs" data-testid="input-observacao-revisao" />
           <Button size="sm" className="text-xs" onClick={() => revisarMutation.mutate()} disabled={!observacao.trim() || revisarMutation.isPending} data-testid="button-enviar-revisao">
@@ -921,9 +921,9 @@ function FormularioClienteSection({ operationId }: { operationId: number }) {
       )}
 
       {formulario.observacaoRevisao && formulario.status === "em_revisao" && (
-        <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded border border-amber-200 text-xs">
-          <p className="font-medium text-amber-700">Revisão solicitada:</p>
-          <p className="text-amber-600 mt-0.5">{formulario.observacaoRevisao}</p>
+        <div className="p-2 bg-amber-900/20 rounded border border-amber-800 text-xs">
+          <p className="font-medium text-amber-400">Revisão solicitada:</p>
+          <p className="text-amber-400 mt-0.5">{formulario.observacaoRevisao}</p>
         </div>
       )}
     </div>
@@ -1082,7 +1082,7 @@ export default function OperacaoDetalhePage({ id }: { id: string }) {
               </Button>
             )}
             {["aprovado", "comissao_gerada"].includes(op.stage) && !op.comissaoRecebida && (
-              <Button variant="outline" className="text-green-600 border-green-300" onClick={() => updateMutation.mutate({ comissaoRecebida: true })} disabled={updateMutation.isPending} data-testid="button-n-mark-commission">
+              <Button variant="outline" className="text-green-400 border-green-700" onClick={() => updateMutation.mutate({ comissaoRecebida: true })} disabled={updateMutation.isPending} data-testid="button-n-mark-commission">
                 <CheckCircle2 className="w-4 h-4 mr-1.5" />
                 Marcar Comissão Recebida
               </Button>

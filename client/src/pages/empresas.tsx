@@ -14,26 +14,26 @@ import { Input } from "@/components/ui/input";
 function ProfileBadge({ profile }: { profile: string | null | undefined }) {
   const p = (profile || "baixo").toLowerCase();
   const colors: Record<string, string> = {
-    alto: "bg-green-100 text-green-700 border-green-300",
-    medio: "bg-amber-100 text-amber-700 border-amber-300",
-    baixo: "bg-slate-100 text-slate-600 border-slate-300",
+    alto: "bg-green-900/30 text-green-400 border-green-700",
+    medio: "bg-amber-900/30 text-amber-400 border-amber-700",
+    baixo: "bg-slate-800/40 text-slate-400 border-slate-600",
   };
   return <Badge variant="outline" className={cn("text-xs", colors[p] || colors.baixo)}>{p.charAt(0).toUpperCase() + p.slice(1)}</Badge>;
 }
 
 function ScoreBadge({ score }: { score: number | null | undefined }) {
   const s = score || 0;
-  if (s === 0) return <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-400">\u2014</Badge>;
-  const color = s > 65 ? "text-green-700 bg-green-50 border-green-300" : s >= 35 ? "text-amber-700 bg-amber-50 border-amber-300" : "text-red-600 bg-red-50 border-red-200";
+  if (s === 0) return <Badge variant="outline" className="text-[10px] bg-slate-800/40 text-slate-400">\u2014</Badge>;
+  const color = s > 65 ? "text-green-400 bg-green-900/30 border-green-700" : s >= 35 ? "text-amber-400 bg-amber-900/30 border-amber-700" : "text-red-400 bg-red-900/30 border-red-700";
   return <Badge variant="outline" className={cn("text-[10px] font-bold", color)}>{s}</Badge>;
 }
 
 function CafBadge({ enrichmentData }: { enrichmentData: any }) {
   const caf = enrichmentData?.caf;
-  if (!caf || !caf.numeroCAF) return <Badge variant="outline" className="text-xs bg-slate-50 text-slate-400 border-slate-200">Sem CAF</Badge>;
+  if (!caf || !caf.numeroCAF) return <Badge variant="outline" className="text-xs bg-slate-800/40 text-slate-400 border-slate-600">Sem CAF</Badge>;
   const isValid = caf.validade && new Date(caf.validade) > new Date();
   return (
-    <Badge variant="outline" className={cn("text-xs", isValid ? "bg-green-50 text-green-700 border-green-300" : "bg-red-50 text-red-600 border-red-300")}>
+    <Badge variant="outline" className={cn("text-xs", isValid ? "bg-green-900/30 text-green-400 border-green-700" : "bg-red-900/30 text-red-400 border-red-700")}>
       <Leaf className="w-3 h-3 mr-1" />
       {isValid ? "CAF Ativo" : "CAF Vencido"}
     </Badge>
@@ -44,7 +44,7 @@ function EnrichmentIndicator({ enrichedAt, onEnrich, isPending }: { enrichedAt: 
   if (enrichedAt) {
     return (
       <div className="flex items-center gap-1">
-        <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+        <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
         <span className="text-[10px] text-muted-foreground">{new Date(enrichedAt).toLocaleDateString("pt-BR")}</span>
       </div>
     );

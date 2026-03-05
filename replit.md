@@ -109,6 +109,13 @@ shared/
   - `GET /api/norion/companies/:id/data-sources` — all stored API results
   - `GET /api/norion/companies/:id/operations` — all operations for company
 
+## Theming
+- Dark theme only (no light mode toggle). CSS `:root` vars define dark navy palette (--background: 222 47% 11%)
+- Tailwind `darkMode: ["class"]` is configured but `.dark` class is NOT applied to `<html>` — `dark:` variants never activate
+- All page-level colors use dark-suitable values directly (e.g., `bg-slate-800/60`, `bg-green-900/30`, `text-green-400`)
+- No `dark:` prefix variants in page components — only in shadcn ui library components
+- Portal client pages (portal-cliente-*) have their own dark navy styling
+
 ## Notes
 - The Notion integration was not used (user dismissed it). If needed in the future, can be set up via Replit integrations or manual API token.
 - GitHub repo: mavriondev/norion-capital (público). Último sync: commit ec85abe3 (company history tracking, data aggregation, permanent portal access)

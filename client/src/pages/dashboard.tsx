@@ -18,12 +18,12 @@ import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 
 const STAGES = [
-  { key: "identificado", label: "Identificado", icon: Search, color: "bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600" },
-  { key: "diagnostico", label: "Diagnóstico", icon: FileSearch, color: "bg-blue-50 dark:bg-blue-950 border-blue-300 dark:border-blue-700" },
-  { key: "enviado_fundos", label: "Enviado aos Fundos", icon: Send, color: "bg-indigo-50 dark:bg-indigo-950 border-indigo-300 dark:border-indigo-700" },
-  { key: "em_analise", label: "Em Análise", icon: Clock, color: "bg-amber-50 dark:bg-amber-950 border-amber-300 dark:border-amber-700" },
-  { key: "aprovado", label: "Aprovado", icon: CheckCircle2, color: "bg-green-50 dark:bg-green-950 border-green-300 dark:border-green-700" },
-  { key: "comissao_gerada", label: "Comissão Gerada", icon: BadgeDollarSign, color: "bg-emerald-50 dark:bg-emerald-950 border-emerald-300 dark:border-emerald-700" },
+  { key: "identificado", label: "Identificado", icon: Search, color: "bg-slate-800/40 border-slate-600" },
+  { key: "diagnostico", label: "Diagnóstico", icon: FileSearch, color: "bg-blue-900/30 border-blue-700" },
+  { key: "enviado_fundos", label: "Enviado aos Fundos", icon: Send, color: "bg-indigo-900/30 border-indigo-700" },
+  { key: "em_analise", label: "Em Análise", icon: Clock, color: "bg-amber-900/30 border-amber-700" },
+  { key: "aprovado", label: "Aprovado", icon: CheckCircle2, color: "bg-green-900/30 border-green-700" },
+  { key: "comissao_gerada", label: "Comissão Gerada", icon: BadgeDollarSign, color: "bg-emerald-900/30 border-emerald-700" },
 ];
 
 const STAGE_LABELS: Record<string, string> = {
@@ -36,12 +36,12 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const STAGE_BADGE_COLORS: Record<string, string> = {
-  identificado: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  diagnostico: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  enviado_fundos: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300",
-  em_analise: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
-  aprovado: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-  comissao_gerada: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300",
+  identificado: "bg-slate-800/40 text-slate-300",
+  diagnostico: "bg-blue-900/30 text-blue-300",
+  enviado_fundos: "bg-indigo-900/30 text-indigo-300",
+  em_analise: "bg-amber-900/30 text-amber-300",
+  aprovado: "bg-green-900/30 text-green-300",
+  comissao_gerada: "bg-emerald-900/30 text-emerald-300",
 };
 
 function formatBRL(value: number | null | undefined) {
@@ -119,7 +119,7 @@ function CotacaoCard({ name, value, pctChange, unit }: { name: string; value: nu
       </div>
       <div className="text-right">
         <p className="text-sm font-bold">{formatBRLDecimal(value)}</p>
-        <div className={cn("flex items-center gap-0.5 text-[11px] font-medium justify-end", isUp ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400")}>
+        <div className={cn("flex items-center gap-0.5 text-[11px] font-medium justify-end", isUp ? "text-green-400" : "text-red-400")}>
           {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
           {formatPct(pctChange)}
         </div>
@@ -176,7 +176,7 @@ export default function NorionDashboardPage() {
 
       {((d.formulariosAguardando || 0) + (d.formulariosEmRevisao || 0)) > 0 && (
         <Link href="/portal-clientes">
-          <Card className="border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30 cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-950/50 transition-colors" data-testid="card-formularios-pendentes">
+          <Card className="border-amber-700 bg-amber-900/30 cursor-pointer hover:bg-amber-900/40 transition-colors" data-testid="card-formularios-pendentes">
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center shrink-0">
                 <FileText className="w-5 h-5 text-white" />
@@ -241,7 +241,7 @@ export default function NorionDashboardPage() {
                 {(d.recentOps || []).map((op: any) => (
                   <Link key={op.id} href={`/operacoes/${op.id}`}>
                     <div className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer" data-testid={`recent-op-${op.id}`}>
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                      <div className="w-8 h-8 rounded-lg bg-slate-800/40 flex items-center justify-center shrink-0">
                         <Building2 className="w-4 h-4 text-muted-foreground" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -273,9 +273,9 @@ export default function NorionDashboardPage() {
           <CardContent>
             <div className="space-y-3">
               {[
-                { key: "alto", label: "Alto", color: "bg-green-500", bgColor: "bg-green-100 dark:bg-green-900/30" },
-                { key: "medio", label: "Médio", color: "bg-amber-500", bgColor: "bg-amber-100 dark:bg-amber-900/30" },
-                { key: "baixo", label: "Baixo", color: "bg-slate-400", bgColor: "bg-slate-100 dark:bg-slate-800" },
+                { key: "alto", label: "Alto", color: "bg-green-500", bgColor: "bg-green-900/30" },
+                { key: "medio", label: "Médio", color: "bg-amber-500", bgColor: "bg-amber-900/30" },
+                { key: "baixo", label: "Baixo", color: "bg-slate-400", bgColor: "bg-slate-800/40" },
               ].map(p => {
                 const count = d.profileDist?.[p.key] || 0;
                 const total = d.totalEmpresas || 1;

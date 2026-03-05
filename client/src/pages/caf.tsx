@@ -32,8 +32,8 @@ function formatCurrency(v: number) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  if (status === "ativo") return <Badge className="bg-green-100 text-green-700 border-green-300" data-testid="badge-status-ativo"><CheckCircle className="w-3 h-3 mr-1" />Ativo</Badge>;
-  if (status === "vencido") return <Badge className="bg-red-100 text-red-700 border-red-300" data-testid="badge-status-vencido"><XCircle className="w-3 h-3 mr-1" />Vencido</Badge>;
+  if (status === "ativo") return <Badge className="bg-green-900/30 text-green-400 border-green-700" data-testid="badge-status-ativo"><CheckCircle className="w-3 h-3 mr-1" />Ativo</Badge>;
+  if (status === "vencido") return <Badge className="bg-red-900/30 text-red-400 border-red-700" data-testid="badge-status-vencido"><XCircle className="w-3 h-3 mr-1" />Vencido</Badge>;
   return <Badge variant="outline" data-testid="badge-status-pendente"><AlertTriangle className="w-3 h-3 mr-1" />Pendente</Badge>;
 }
 
@@ -81,8 +81,8 @@ export default function NorionCafPage() {
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-green-100 rounded-lg">
-            <Leaf className="w-6 h-6 text-green-700" />
+          <div className="p-2 bg-green-900/30 rounded-lg">
+            <Leaf className="w-6 h-6 text-green-400" />
           </div>
           <div>
             <h1 className="text-2xl font-bold" data-testid="title-caf">CAF - Agricultura Familiar</h1>

@@ -83,8 +83,8 @@ export default function CafNovoPage() {
         <Button variant="ghost" size="sm" onClick={() => setLocation("/caf")} data-testid="button-voltar-caf">
           <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
         </Button>
-        <div className="p-2 bg-green-100 rounded-lg">
-          <Leaf className="w-6 h-6 text-green-700" />
+        <div className="p-2 bg-green-900/30 rounded-lg">
+          <Leaf className="w-6 h-6 text-green-400" />
         </div>
         <div>
           <h1 className="text-2xl font-bold" data-testid="title-caf-novo">Novo Registro CAF</h1>
@@ -102,7 +102,7 @@ export default function CafNovoPage() {
               { id: "entidade" as const, label: "Entidade" },
             ].map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${tab === t.id ? "border-green-600 text-green-700" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${tab === t.id ? "border-green-500 text-green-400" : "border-transparent text-muted-foreground hover:text-foreground"}`}
                 data-testid={`tab-${t.id}`}
               >{t.label}</button>
             ))}
