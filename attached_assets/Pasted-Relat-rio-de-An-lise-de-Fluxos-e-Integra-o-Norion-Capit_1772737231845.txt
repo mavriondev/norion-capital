@@ -1,0 +1,450 @@
+Relatório de Análise de Fluxos e Integração — Norion Capital
+
+Autor: Manus AI
+Data: Março de 2026
+Versão: 2.0 — Análise Completa de Coesão e Comunicação entre Módulos
+
+
+
+
+Sumário Executivo
+
+Este relatório apresenta a análise completa dos fluxos do sistema Norion Capital, verificando se todos os módulos se comunicam de forma coesa desde a entrada do cliente até o encerramento da operação. A análise identificou que o sistema possui uma arquitetura bem estruturada e funcionalmente conectada, com o fluxo principal operando corretamente. No entanto, foram identificados 6 problemas críticos e 9 melhorias importantes que, se não corrigidos, podem causar falhas na experiência do cliente e na operação interna.
+
+
+
+
+1. Mapeamento do Fluxo Completo
+
+O sistema possui dois fluxos principais que precisam se comunicar perfeitamente:
+
+1.1 Fluxo Interno (Equipe Norion)
+
+Plain Text
+
+
+SDR identifica lead → Empresa cadastrada no CRM → Operação criada → 
+Diagnóstico preenchido → Acesso do portal gerado → Cliente preenche formulário → 
+Admin revisa formulário → Operação avança para fundos → Fundo aprova → 
+Comissão registrada
+
+
+
+1.2 Fluxo do Cliente (Portal)
+
+Plain Text
+
+
+Cliente recebe link → Login com CPF/CNPJ → Preenche formulário (6 etapas) → 
+Envia documentos → Aguarda revisão → Se revisão: corrige e reenvia → 
+Formulário aprovado → Operação criada automaticamente
+
+
+
+
+
+
+2. O Que Está Funcionando Corretamente ✅
+
+2.1 Portal do Cliente — Login e Autenticação
+
+O login via CPF/CNPJ está corretamente implementado. O backend valida o CPF/CNPJ, verifica se o token está expirado e retorna os dados da sessão. O frontend armazena corretamente no sessionStorage e redireciona para o formulário. A autenticação via middleware portalAuth protege todos os endpoints do portal.
+
+2.2 Formulário em 6 Etapas
+
+O formulário multi-etapas está bem implementado com salvamento automático a cada avanço de etapa. O progresso é salvo no banco de dados (currentStep), permitindo que o cliente retome de onde parou. Os campos de CNPJ e CEP possuem auto-preenchimento via APIs externas.
+
+2.3 Upload de Documentos
+
+O upload de documentos funciona tanto no portal do cliente quanto na operação interna. Os arquivos são enviados para o Google Drive com organização por pastas (empresa/operação). O preview de imagens antes do envio está implementado.
+
+2.4 Revisão de Formulário
+
+O fluxo de revisão está corretamente implementado:
+
+•
+Admin solicita revisão com observação → Status muda para em_revisao
+
+•
+Cliente vê banner de alerta com o motivo da revisão
+
+•
+Cliente edita e reenvia → Status volta para rascunho
+
+•
+Admin aprova → Status muda para aprovado
+
+2.5 Criação Automática de Operação
+
+Quando o admin aprova um formulário e clica em "Criar Operação", o sistema:
+
+1.
+Verifica se já existe empresa com o CNPJ/CPF e cria se não existir
+
+2.
+Cria a operação vinculada à empresa
+
+3.
+Migra os documentos do cliente para a operação
+
+4.
+Vincula o cliente à operação
+
+5.
+Faz matching automático com fundos parceiros
+
+6.
+Registra auditoria
+
+2.6 Validação de Documentos no Avanço de Estágio
+
+O backend bloqueia o avanço para estágios avançados (enviado_fundos, em_analise, aprovado, comissao_gerada) se houver documentos obrigatórios pendentes, retornando a lista dos documentos faltantes.
+
+2.7 Matching de Fundos
+
+O algoritmo de matching entre operações e fundos parceiros está implementado, considerando tipo de operação, faixa de valor, prazo e garantias.
+
+
+
+
+3. Problemas Críticos Identificados ❌
+
+Problema 1 — Documento Rejeitado Sem Instrução ao Cliente
+
+Onde: portal-cliente-dashboard.tsx e portal-cliente-formulario.tsx
+
+O problema: Quando um documento é rejeitado pelo admin (status rejeitado), o cliente vê apenas o badge vermelho "Rejeitado", mas não recebe nenhuma instrução sobre o motivo da rejeição ou o que precisa ser corrigido. O campo observacao existe no banco de dados (norionDocuments.observacao), mas nunca é exibido para o cliente.
+
+Impacto: O cliente fica perdido, sem saber o que corrigir. Pode reenviar o mesmo documento incorreto repetidamente.
+
+Correção necessária: Exibir o campo observacao do documento quando o status for rejeitado, com destaque visual e instrução clara.
+
+
+
+
+Problema 2 — Formulário em Revisão Não Indica Quais Campos Corrigir
+
+Onde: portal-cliente-formulario.tsx
+
+O problema: O banner de revisão exibe a observacaoRevisao (texto livre do admin), mas não destaca visualmente quais campos específicos precisam ser corrigidos. O cliente precisa ler o texto e adivinhar onde está o erro.
+
+Impacto: Experiência ruim para o cliente, risco de nova rejeição por não corrigir os campos certos.
+
+Correção necessária: O campo de observação de revisão deveria ter um formato estruturado (lista de campos a corrigir) e o formulário deveria destacar visualmente esses campos com borda vermelha e mensagem de erro.
+
+
+
+
+Problema 3 — Formulário do Cliente Não Aparece na Operação Quando Criado Pelo Portal Avulso
+
+Onde: operacao-detalhe.tsx → FormularioClienteSection
+
+O problema: A seção FormularioClienteSection busca formulários usando:
+
+TypeScript
+
+
+const formulario = (formularios as any[]).find((f: any) => f.operationId === operationId);
+
+
+
+Quando o acesso é gerado de forma avulsa (sem operação vinculada), o formulário tem operationId = null. Quando a operação é criada depois, o operationId do formulário é atualizado. Porém, se a operação foi criada manualmente (não pelo formulário), o formulário nunca aparece na aba da operação, mesmo que o cliente tenha preenchido.
+
+Impacto: O gestor não vê o formulário do cliente na tela da operação, perdendo dados importantes.
+
+Correção necessária: Buscar também pelo clientUserId vinculado à operação, não apenas pelo operationId.
+
+
+
+
+Problema 4 — Notificação de Novo Formulário Enviado Não Existe
+
+Onde: server/routes/norion-portal.ts → endpoint POST /formulario/finalizar
+
+O problema: Quando o cliente finaliza e envia o formulário, o backend apenas atualiza o status para enviado. Não há nenhuma notificação para a equipe interna (email, alerta no painel, etc.) de que um novo formulário foi submetido.
+
+Impacto: A equipe precisa verificar manualmente a lista de formulários para saber se chegou algo novo. Formulários podem ficar sem resposta por dias.
+
+Correção necessária: Implementar um sistema de alertas/notificações no dashboard interno quando um formulário é enviado.
+
+
+
+
+Problema 5 — Token de Acesso do Portal Não É Renovado Automaticamente
+
+Onde: server/routes/norion-portal.ts → endpoint POST /login-cpf
+
+O problema: O token de acesso expira em 30 dias. Quando expira, o cliente recebe a mensagem "Acesso expirado. Solicite um novo acesso ao consultor." Não há forma do cliente renovar o próprio acesso — ele precisa contatar o consultor, que precisa gerar um novo link manualmente.
+
+Impacto: Fricção desnecessária no processo, especialmente se o cliente demorar para preencher o formulário.
+
+Correção necessária: Renovar automaticamente o token quando o cliente faz login com sucesso (se o token ainda estiver válido ou próximo do vencimento).
+
+
+
+
+Problema 6 — Documentos do Portal Não São Sincronizados com a Operação em Tempo Real
+
+Onde: operacao-detalhe.tsx → DocumentChecklist
+
+O problema: Os documentos enviados pelo cliente via portal são vinculados à operação quando o admin clica em "Criar Operação". Porém, se o admin aprova o formulário e cria a operação, e o cliente continua enviando documentos depois, esses novos documentos são vinculados à operação via operationId. Mas a aba de documentos da operação usa a query:
+
+TypeScript
+
+
+queryKey: ["/api/norion/operations", operationId, "documents"]
+
+
+
+Esta query tem staleTime: Infinity no queryClient.ts, o que significa que os novos documentos enviados pelo cliente não aparecem automaticamente para o gestor — ele precisa recarregar a página.
+
+Impacto: Gestor pode não ver documentos recém-enviados pelo cliente.
+
+Correção necessária: Reduzir o staleTime para 2-5 minutos ou implementar polling.
+
+
+
+
+4. Melhorias Importantes 💡
+
+Melhoria 1 — Indicador de Progresso de Documentos na Operação
+
+O painel do cliente tem uma barra de progresso de documentos, mas a tela interna da operação não tem um indicador visual equivalente. O gestor precisa abrir a aba de documentos para ver o progresso.
+
+Melhoria 2 — Histórico de Revisões do Formulário
+
+O sistema sobrescreve a observacaoRevisao a cada nova revisão. Não há histórico de quantas revisões foram feitas, quem solicitou e quando.
+
+Melhoria 3 — Confirmação de Leitura da Revisão pelo Cliente
+
+Não há como saber se o cliente leu a solicitação de revisão. O status permanece em_revisao até o cliente editar algo, mas não há confirmação explícita de leitura.
+
+Melhoria 4 — Checklist de Documentos Genérico (Home Equity)
+
+O checklist CHECKLIST_HOME_EQUITY é usado para todas as operações, independentemente do tipo de crédito. Uma operação de capital de giro não precisa de matrícula de imóvel, por exemplo.
+
+Melhoria 5 — Falta de Validação de Campos Obrigatórios no Formulário
+
+O formulário do cliente não valida se os campos obrigatórios foram preenchidos antes de avançar para a próxima etapa ou finalizar. O cliente pode enviar um formulário incompleto.
+
+Melhoria 6 — Link do Portal Não Inclui o CPF Automaticamente
+
+O link gerado é /portal-cliente sem o CPF pré-preenchido. O cliente precisa digitar o CPF manualmente. O link poderia incluir o CPF como parâmetro para facilitar o acesso.
+
+Melhoria 7 — Dados do Formulário Não São Pré-Populados na Operação
+
+Quando o admin cria uma operação a partir do formulário, os dados do formulário (valor solicitado, finalidade, prazo, garantias) são copiados para o diagnostico da operação. Porém, os dados da Defesa de Crédito não são pré-populados com as informações do formulário.
+
+Melhoria 8 — Sem Feedback Visual de "Aguardando Análise" para o Cliente
+
+Após enviar o formulário, o cliente vê apenas "Formulário Enviado — Seu formulário está em análise." Não há indicação de prazo estimado, etapas do processo ou próximos passos.
+
+Melhoria 9 — Ausência de Notificação por E-mail
+
+Não há envio de e-mail em nenhuma etapa do processo: nem para o cliente (confirmação de envio, revisão solicitada, aprovação) nem para a equipe (novo formulário recebido).
+
+
+
+
+5. Análise de Comunicação entre Módulos
+
+Módulo A
+Módulo B
+Status
+Observação
+SDR
+Empresas (CRM)
+✅ Conectado
+SDR cria leads que viram empresas
+SDR
+Operações
+⚠️ Incompleto
+Falta botão direto para criar operação
+Empresas
+Operações
+✅ Conectado
+Operação vincula à empresa
+Operações
+Documentos
+✅ Conectado
+Checklist criado automaticamente
+Operações
+Fundos
+✅ Conectado
+Matching automático
+Operações
+Portal
+✅ Conectado
+Acesso gerado pela operação
+Portal (Login)
+Portal (Formulário)
+✅ Conectado
+Sessão compartilhada via sessionStorage
+Portal (Formulário)
+Documentos
+✅ Conectado
+Upload vinculado ao cliente/operação
+Portal (Formulário)
+Operações
+✅ Conectado
+Criação automática ao aprovar
+Documentos (Portal)
+Documentos (Operação)
+⚠️ Incompleto
+Sincronização com staleTime: Infinity
+Formulário
+Notificação Interna
+❌ Ausente
+Sem alerta ao enviar formulário
+Documentos (Rejeitado)
+Cliente
+❌ Incompleto
+Motivo de rejeição não exibido
+Revisão
+Campos do Formulário
+❌ Incompleto
+Campos problemáticos não destacados
+CAF
+Operações
+✅ Conectado
+Dados CAF aparecem na Defesa de Crédito
+Dashboard
+Operações
+✅ Conectado
+KPIs calculados em tempo real
+Relatório
+Operações
+✅ Conectado
+Filtros e exportação funcionando
+
+
+
+
+
+
+
+6. Fluxo de Revisão — Análise Detalhada
+
+O fluxo de revisão é um dos pontos mais críticos para a experiência do cliente. Veja como está atualmente e como deveria ser:
+
+Estado Atual
+
+Plain Text
+
+
+Admin solicita revisão → observacaoRevisao salvo no banco
+Cliente abre formulário → Vê banner amarelo com texto livre
+Cliente edita qualquer campo → Status volta para "rascunho"
+Cliente clica "Finalizar" → Status vai para "enviado"
+Admin revisa novamente → Aprova ou pede nova revisão
+
+
+
+Problema: O cliente não sabe quais campos específicos corrigir. O texto de revisão é livre e pode ser vago.
+
+Estado Ideal
+
+Plain Text
+
+
+Admin solicita revisão → Seleciona campos problemáticos + escreve observação
+Cliente abre formulário → Vê banner com lista de campos a corrigir
+Campos problemáticos → Destacados com borda vermelha e mensagem
+Cliente corrige campos → Indicador visual de "corrigido"
+Cliente clica "Finalizar" → Verificação se todos os campos foram corrigidos
+Admin revisa → Vê quais campos foram alterados desde a última revisão
+
+
+
+
+
+
+7. Plano de Correção Priorizado
+
+Prioridade 1 — Crítico (Implementar Imediatamente)
+
+#
+Problema
+Arquivo(s)
+Tempo Estimado
+1
+Exibir motivo de rejeição de documento ao cliente
+portal-cliente-dashboard.tsx, portal-cliente-formulario.tsx
+1h
+2
+Corrigir busca de formulário na operação (por clientUserId)
+operacao-detalhe.tsx
+30min
+3
+Reduzir staleTime do QueryClient
+queryClient.ts
+15min
+4
+Renovar token automaticamente no login
+norion-portal.ts
+30min
+
+
+
+
+Prioridade 2 — Importante (Implementar em Seguida)
+
+#
+Melhoria
+Arquivo(s)
+Tempo Estimado
+5
+Validação de campos obrigatórios no formulário
+portal-cliente-formulario.tsx
+2h
+6
+Alerta visual no dashboard quando formulário é enviado
+dashboard.tsx, norion-portal.ts
+2h
+7
+Pré-popular link com CPF do cliente
+norion-portal.ts, portal-clientes-admin.tsx
+30min
+8
+Adicionar botão "Criar Operação" no SDR
+sdr.tsx
+1h
+
+
+
+
+Prioridade 3 — Melhorias (Implementar Quando Possível)
+
+#
+Melhoria
+Arquivo(s)
+Tempo Estimado
+9
+Checklist de documentos por tipo de operação
+norion.ts
+3h
+10
+Histórico de revisões do formulário
+schema.ts, norion-portal.ts
+2h
+11
+Notificações por e-mail
+Novo módulo
+4h
+12
+Feedback de próximos passos para o cliente
+portal-cliente-formulario.tsx
+1h
+
+
+
+
+
+
+
+8. Conclusão
+
+O sistema Norion Capital possui uma arquitetura sólida e bem conectada nos fluxos principais. A comunicação entre os módulos de Operações, Portal do Cliente, Documentos e Fundos está implementada e funcional. Os principais pontos de atenção estão na experiência do cliente durante o processo de revisão e na visibilidade interna de novos eventos (formulários enviados, documentos atualizados).
+
+As 4 correções de Prioridade 1 são simples de implementar (estimativa total de 2h15min) e eliminam os principais pontos de falha na experiência do cliente. As melhorias de Prioridade 2 e 3 tornam o sistema mais robusto e profissional, mas não bloqueiam o funcionamento atual.
+

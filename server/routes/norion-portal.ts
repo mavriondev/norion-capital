@@ -3,7 +3,7 @@ import { eq, and, or, inArray } from "drizzle-orm";
 import { norionClientUsers, norionOperations, norionDocuments, norionFormularioCliente, norionFundosParceiros, companies } from "@shared/schema";
 import { getOrgId, audit, storage } from "../storage";
 import { uploadToDrive } from "../google-drive";
-import { CHECKLIST_HOME_EQUITY } from "./norion";
+import { CHECKLIST_HOME_EQUITY, getChecklistForOperation } from "./norion";
 import crypto from "crypto";
 
 export function registerNorionPortalRoutes(app: Express, db: any) {
@@ -21,6 +21,18 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
 
       if (clientUser.tokenExpiresAt && new Date(clientUser.tokenExpiresAt) < new Date()) {
         return res.status(401).json({ message: "Token expirado. Solicite um novo acesso ao consultor." });
+      }
+
+      if (clientUser.tokenExpiresAt) {
+        const sixMonthsFromNow = new Date();
+        sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
+        if (new Date(clientUser.tokenExpiresAt) < sixMonthsFromNow) {
+          const newExpiry = new Date();
+          newExpiry.setFullYear(newExpiry.getFullYear() + 2);
+          await db.update(norionClientUsers)
+            .set({ tokenExpiresAt: newExpiry })
+            .where(eq(norionClientUsers.id, clientUser.id));
+        }
       }
 
       res.json({
@@ -438,6 +450,18 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
 
       if (clientUser.tokenExpiresAt && new Date(clientUser.tokenExpiresAt) < new Date()) {
         return res.status(401).json({ message: "Acesso expirado. Solicite um novo acesso ao consultor." });
+      }
+
+      if (clientUser.tokenExpiresAt) {
+        const sixMonthsFromNow = new Date();
+        sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
+        if (new Date(clientUser.tokenExpiresAt) < sixMonthsFromNow) {
+          const newExpiry = new Date();
+          newExpiry.setFullYear(newExpiry.getFullYear() + 2);
+          await db.update(norionClientUsers)
+            .set({ tokenExpiresAt: newExpiry })
+            .where(eq(norionClientUsers.id, clientUser.id));
+        }
       }
 
       res.json({

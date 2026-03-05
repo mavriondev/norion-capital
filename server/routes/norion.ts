@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { eq, and, desc, ilike, sql, gte, lte } from "drizzle-orm";
-import { companies, norionOperations, norionDocuments, norionFundosParceiros, norionEnviosFundos, orgSettings, norionCafRegistros } from "@shared/schema";
+import { companies, norionOperations, norionDocuments, norionFundosParceiros, norionEnviosFundos, orgSettings, norionCafRegistros, norionFormularioCliente } from "@shared/schema";
 import { storage, getOrgId, audit } from "../storage";
 import { consultarFundoCVM, listarFundosEstruturadosANBIMA, isAnbimaConfigured, clearAnbimaTokenCache, type AnbimaCredentials } from "../enrichment/fundos";
 import { uploadToDrive } from "../google-drive";
@@ -28,6 +28,78 @@ export const CHECKLIST_HOME_EQUITY = [
   { categoria: "briefing", tipoDocumento: "comprovante_endereco_empresa", nome: "Comprovante de endereço da empresa", obrigatorio: true },
   { categoria: "briefing", tipoDocumento: "apresentacao_institucional", nome: "Apresentação institucional / plano de negócios", obrigatorio: false },
 ];
+
+export const CHECKLIST_AGRO = [
+  { categoria: "pessoal", tipoDocumento: "rg_cnh", nome: "RG ou CNH (documento com foto)", obrigatorio: true },
+  { categoria: "pessoal", tipoDocumento: "certidao_estado_civil", nome: "Certidão de nascimento ou casamento atualizada", obrigatorio: true },
+  { categoria: "pessoal", tipoDocumento: "comprovante_residencia", nome: "Comprovante de residência (último mês)", obrigatorio: true },
+  { categoria: "pessoal", tipoDocumento: "ir_protocolo_socios", nome: "IR + protocolo sócios/cônjuges (últimos 2 anos)", obrigatorio: true },
+  { categoria: "propriedade", tipoDocumento: "matricula_propriedade", nome: "Matrícula atualizada da propriedade rural", obrigatorio: true },
+  { categoria: "propriedade", tipoDocumento: "car", nome: "CAR - Cadastro Ambiental Rural", obrigatorio: true },
+  { categoria: "propriedade", tipoDocumento: "ccir", nome: "CCIR - Certificado de Cadastro de Imóvel Rural", obrigatorio: true },
+  { categoria: "propriedade", tipoDocumento: "itr", nome: "ITR - Imposto Territorial Rural (último exercício)", obrigatorio: true },
+  { categoria: "propriedade", tipoDocumento: "georreferenciamento", nome: "Memorial descritivo / Georreferenciamento", obrigatorio: false },
+  { categoria: "propriedade", tipoDocumento: "fotos_propriedade", nome: "Fotos da propriedade e benfeitorias", obrigatorio: true },
+  { categoria: "producao", tipoDocumento: "notas_fiscais_producao", nome: "Notas fiscais de venda da produção (últimos 12 meses)", obrigatorio: true },
+  { categoria: "producao", tipoDocumento: "contratos_venda", nome: "Contratos de venda futura / CPR", obrigatorio: false },
+  { categoria: "producao", tipoDocumento: "laudo_agronomico", nome: "Laudo agronômico / plano de safra", obrigatorio: false },
+  { categoria: "producao", tipoDocumento: "inscricao_estadual", nome: "Inscrição estadual do produtor rural", obrigatorio: true },
+  { categoria: "renda", tipoDocumento: "extratos_bancarios", nome: "Extratos bancários dos últimos 6 meses", obrigatorio: true },
+  { categoria: "renda", tipoDocumento: "irpf", nome: "Declaração do IRPF", obrigatorio: true },
+  { categoria: "renda", tipoDocumento: "recibo_irpf", nome: "Recibo de entrega do IRPF", obrigatorio: true },
+  { categoria: "renda", tipoDocumento: "relacao_endividamento", nome: "Relação de endividamento (assinada)", obrigatorio: true },
+  { categoria: "briefing", tipoDocumento: "valor_motivo_credito", nome: "Valor do crédito e motivo do crédito", obrigatorio: true },
+  { categoria: "briefing", tipoDocumento: "profissao_tomador", nome: "Profissão do tomador / atividade rural", obrigatorio: true },
+];
+
+export const CHECKLIST_CAPITAL_GIRO = [
+  { categoria: "pessoal", tipoDocumento: "rg_cnh", nome: "RG ou CNH dos sócios (documento com foto)", obrigatorio: true },
+  { categoria: "pessoal", tipoDocumento: "comprovante_residencia", nome: "Comprovante de residência dos sócios (último mês)", obrigatorio: true },
+  { categoria: "pessoal", tipoDocumento: "ir_protocolo_socios", nome: "IR + protocolo dos sócios (últimos 2 anos)", obrigatorio: true },
+  { categoria: "empresa", tipoDocumento: "contrato_social", nome: "Contrato Social consolidado", obrigatorio: true },
+  { categoria: "empresa", tipoDocumento: "comprovante_endereco_empresa", nome: "Comprovante de endereço da empresa", obrigatorio: true },
+  { categoria: "empresa", tipoDocumento: "cartao_cnpj", nome: "Cartão CNPJ atualizado", obrigatorio: true },
+  { categoria: "empresa", tipoDocumento: "certidoes_negativas", nome: "Certidões negativas (Federal, Estadual, Municipal)", obrigatorio: true },
+  { categoria: "empresa", tipoDocumento: "apresentacao_institucional", nome: "Apresentação institucional / plano de negócios", obrigatorio: false },
+  { categoria: "financeiro", tipoDocumento: "extratos_bancarios", nome: "Extratos bancários dos últimos 6 meses (PJ e PF)", obrigatorio: true },
+  { categoria: "financeiro", tipoDocumento: "balanco_dre_3anos", nome: "Balanço/DRE últimos 3 anos + balancete recente", obrigatorio: true },
+  { categoria: "financeiro", tipoDocumento: "relacao_faturamento_12m", nome: "Relação de faturamento últimos 12 meses (assinada)", obrigatorio: true },
+  { categoria: "financeiro", tipoDocumento: "relacao_endividamento", nome: "Relação de endividamento (assinada)", obrigatorio: true },
+  { categoria: "financeiro", tipoDocumento: "irpf", nome: "Declaração do IRPF dos sócios", obrigatorio: true },
+  { categoria: "financeiro", tipoDocumento: "recibo_irpf", nome: "Recibo de entrega do IRPF dos sócios", obrigatorio: true },
+  { categoria: "briefing", tipoDocumento: "valor_motivo_credito", nome: "Valor do crédito e motivo do crédito", obrigatorio: true },
+  { categoria: "briefing", tipoDocumento: "fluxo_caixa_projetado", nome: "Fluxo de caixa projetado", obrigatorio: false },
+];
+
+export const CHECKLIST_IMOVEL = [
+  { categoria: "pessoal", tipoDocumento: "rg_cnh", nome: "RG ou CNH (documento com foto)", obrigatorio: true },
+  { categoria: "pessoal", tipoDocumento: "certidao_estado_civil", nome: "Certidão de nascimento ou casamento atualizada", obrigatorio: true },
+  { categoria: "pessoal", tipoDocumento: "comprovante_residencia", nome: "Comprovante de residência (último mês)", obrigatorio: true },
+  { categoria: "pessoal", tipoDocumento: "ir_protocolo_socios", nome: "IR + protocolo sócios/cônjuges (últimos 2 anos)", obrigatorio: true },
+  { categoria: "imovel_garantia", tipoDocumento: "matricula_imovel", nome: "Cópia da matrícula atualizada do imóvel em garantia", obrigatorio: true },
+  { categoria: "imovel_garantia", tipoDocumento: "iptu", nome: "IPTU do imóvel em garantia", obrigatorio: true },
+  { categoria: "imovel_garantia", tipoDocumento: "escritura", nome: "Escritura pública de compra e venda", obrigatorio: true },
+  { categoria: "imovel_garantia", tipoDocumento: "fotos_imovel", nome: "Fotos do imóvel (externas e internas)", obrigatorio: true },
+  { categoria: "imovel_garantia", tipoDocumento: "planilha_garantias", nome: "Planilha de garantias", obrigatorio: true },
+  { categoria: "imovel_garantia", tipoDocumento: "certidoes_imovel", nome: "Certidões do imóvel (ônus reais, ações reipersecutórias)", obrigatorio: true },
+  { categoria: "imovel_compra", tipoDocumento: "matricula_imovel_compra", nome: "Matrícula do imóvel a ser adquirido", obrigatorio: true },
+  { categoria: "imovel_compra", tipoDocumento: "contrato_compra_venda", nome: "Contrato ou proposta de compra e venda", obrigatorio: true },
+  { categoria: "imovel_compra", tipoDocumento: "iptu_compra", nome: "IPTU do imóvel a ser adquirido", obrigatorio: true },
+  { categoria: "renda", tipoDocumento: "extratos_bancarios", nome: "Extratos bancários dos últimos 6 meses", obrigatorio: true },
+  { categoria: "renda", tipoDocumento: "irpf", nome: "Declaração do IRPF", obrigatorio: true },
+  { categoria: "renda", tipoDocumento: "recibo_irpf", nome: "Recibo de entrega do IRPF", obrigatorio: true },
+  { categoria: "renda", tipoDocumento: "relacao_endividamento", nome: "Relação de endividamento (assinada)", obrigatorio: true },
+  { categoria: "briefing", tipoDocumento: "valor_motivo_credito", nome: "Valor do crédito e motivo do crédito", obrigatorio: true },
+  { categoria: "briefing", tipoDocumento: "profissao_tomador", nome: "Profissão do tomador", obrigatorio: true },
+];
+
+export function getChecklistForOperation(diagnostico: any): typeof CHECKLIST_HOME_EQUITY {
+  const finalidade = (diagnostico?.finalidade || "").toLowerCase().trim();
+  if (finalidade === "agro") return CHECKLIST_AGRO;
+  if (finalidade === "capital de giro") return CHECKLIST_CAPITAL_GIRO;
+  if (finalidade.includes("imóvel") || finalidade.includes("imovel")) return CHECKLIST_IMOVEL;
+  return CHECKLIST_HOME_EQUITY;
+}
 
 const SETORES_ALTO = ["01","02","03","41","42","43","10","11","12","13","14","45","46","47","49","50","51","52"];
 const SETORES_MEDIO = ["56","55","62","63","68","85","86"];
@@ -86,7 +158,8 @@ export function registerNorionRoutes(app: Express, db: any) {
       await audit({ orgId, userId: user?.id, userName: user?.username,
         entity: "norion_operation", entityId: op.id, entityTitle: company.legalName,
         action: "created", changes: { stage: { from: null, to: op.stage } } });
-      for (const item of CHECKLIST_HOME_EQUITY) {
+      const checklist = getChecklistForOperation(diagnostico);
+      for (const item of checklist) {
         await storage.createNorionDocument({
           orgId, operationId: op.id,
           categoria: item.categoria, tipoDocumento: item.tipoDocumento,
@@ -187,6 +260,10 @@ export function registerNorionRoutes(app: Express, db: any) {
       const aprovadas = ops.filter(o => ["aprovado","comissao_gerada"].includes(o.stage));
       const recebidas = ops.filter(o => o.comissaoRecebida);
 
+      const allForms = await db.select().from(norionFormularioCliente).where(eq(norionFormularioCliente.orgId, orgId));
+      const formulariosAguardando = allForms.filter(f => f.status === "enviado").length;
+      const formulariosEmRevisao = allForms.filter(f => f.status === "em_revisao").length;
+
       const recentOps = ops
         .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
         .slice(0, 5)
@@ -226,6 +303,8 @@ export function registerNorionRoutes(app: Express, db: any) {
         },
         recentOps,
         profileDist,
+        formulariosAguardando,
+        formulariosEmRevisao,
       });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -714,8 +793,9 @@ export function registerNorionRoutes(app: Express, db: any) {
       if (!op) return res.status(404).json({ message: "Operação não encontrada" });
       const existing = await storage.getNorionDocuments(operationId, orgId);
       if (existing.length > 0) return res.json({ message: "Checklist já gerado", documents: existing });
+      const checklist = getChecklistForOperation(op.diagnostico);
       const created = [];
-      for (const item of CHECKLIST_HOME_EQUITY) {
+      for (const item of checklist) {
         const doc = await storage.createNorionDocument({
           orgId, operationId,
           categoria: item.categoria,

@@ -83,6 +83,16 @@ shared/
 - `company_data_sources` — dados agregados por fonte para cada empresa
 - `company_timeline_events` — timeline de eventos do cliente (consultas, formulários, documentos, etc)
 
+## Manus AI Report Improvements (all implemented)
+- T001: Motivo de rejeição de documento exibido no portal-cliente-dashboard
+- T002: Busca de formulário por clientUserId na operação (acesso avulso)
+- T003: Renovação automática de token quando expira em < 6 meses (login e login-cpf)
+- T004: Alerta no dashboard admin quando há formulários aguardando revisão
+- T005: Validação de campos obrigatórios por etapa no formulário do cliente
+- T006: CPF pré-populado no link do portal (?cpf=)
+- T007: Checklists por tipo de operação (Agro, Capital de Giro, Imóvel, Home Equity)
+- T008: Timeline de próximos passos após envio do formulário
+
 ## Notes
 - The Notion integration was not used (user dismissed it). If needed in the future, can be set up via Replit integrations or manual API token.
 - GitHub repo: mavriondev/norion-capital (público). Último sync: commit ec85abe3 (company history tracking, data aggregation, permanent portal access)

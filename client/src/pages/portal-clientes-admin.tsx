@@ -103,7 +103,8 @@ function EnviarAcessoTab() {
       return res.json();
     },
     onSuccess: (data: any) => {
-      const link = `${window.location.origin}${data.portalUrl}`;
+      const cleanCpf = (data.loginTaxId || "").replace(/\D/g, "");
+      const link = `${window.location.origin}${data.portalUrl}${cleanCpf ? `?cpf=${cleanCpf}` : ""}`;
       setGeneratedLink(link);
       setGeneratedTaxId(data.loginTaxId);
       toast({ title: "Acesso gerado com sucesso!" });

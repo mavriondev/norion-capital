@@ -795,7 +795,11 @@ function FormularioClienteSection({ operationId }: { operationId: number }) {
     },
   });
 
-  const formulario = (formularios as any[]).find((f: any) => f.operationId === operationId);
+  const formulario = (formularios as any[]).find((f: any) => {
+    if (f.operationId === operationId) return true;
+    if (f.clientUser?.operationId === operationId) return true;
+    return false;
+  });
 
   const aprovarMutation = useMutation({
     mutationFn: async () => {

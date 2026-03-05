@@ -311,6 +311,11 @@ export default function PortalClienteDashboard() {
                                 <Badge variant={statusConf.variant} className="text-[10px]">{statusConf.label}</Badge>
                                 {doc.obrigatorio && <span className="text-[10px] text-red-500">Obrigatório</span>}
                               </div>
+                              {doc.status === "rejeitado" && doc.observacao && (
+                                <p className="text-xs text-red-600 dark:text-red-400 mt-1" data-testid={`text-rejection-reason-${doc.id}`}>
+                                  {doc.observacao}
+                                </p>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-1.5">

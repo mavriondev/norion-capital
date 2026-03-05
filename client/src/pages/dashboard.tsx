@@ -5,7 +5,7 @@ import {
   CheckCircle2, Loader2, Building2, ArrowUpRight,
   CloudRain, Sun, CloudSun, Cloud, CloudSnow, CloudFog,
   CloudLightning, Droplets, Wind, Thermometer, Wheat,
-  RefreshCw, MapPin, Eye,
+  RefreshCw, MapPin, Eye, AlertTriangle, FileText,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -173,6 +173,27 @@ export default function NorionDashboardPage() {
           </div>
         </div>
       </div>
+
+      {((d.formulariosAguardando || 0) + (d.formulariosEmRevisao || 0)) > 0 && (
+        <Link href="/portal-clientes">
+          <Card className="border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/30 cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-950/50 transition-colors" data-testid="card-formularios-pendentes">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center shrink-0">
+                <FileText className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">
+                  {d.formulariosAguardando > 0 && <span>{d.formulariosAguardando} formulário{d.formulariosAguardando > 1 ? "s" : ""} aguardando revisão</span>}
+                  {d.formulariosAguardando > 0 && d.formulariosEmRevisao > 0 && <span> · </span>}
+                  {d.formulariosEmRevisao > 0 && <span>{d.formulariosEmRevisao} em revisão pelo cliente</span>}
+                </p>
+                <p className="text-xs text-muted-foreground">Clique para ver no painel do portal</p>
+              </div>
+              <ArrowUpRight className="w-4 h-4 text-amber-500 shrink-0" />
+            </CardContent>
+          </Card>
+        </Link>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard icon={BarChart3} label="Operações" value={String(d.totalOperacoes || 0)} subtitle={`${d.totalEmpresas || 0} empresas`} color="bg-blue-600" testId="card-n-total-operacoes" />

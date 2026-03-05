@@ -33,6 +33,12 @@ export default function PortalClienteLogin() {
     const existing = sessionStorage.getItem("portalClientId");
     if (existing) {
       setLocation("/portal-cliente/formulario");
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const cpfParam = params.get("cpf");
+    if (cpfParam) {
+      setTaxId(formatTaxId(cpfParam));
     }
   }, [setLocation]);
 

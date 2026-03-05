@@ -15,6 +15,7 @@ import {
   CreditCard, Building2, FileText, LogOut, ChevronLeft,
   ChevronRight, AlertTriangle, CheckCircle2, Eye, Camera,
   ChevronDown, ChevronUp, Home, Wallet, ClipboardList,
+  Clock, Search, Phone,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -205,6 +206,7 @@ export default function PortalClienteFormulario() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewDocId, setPreviewDocId] = useState<number | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const portalClientId = sessionStorage.getItem("portalClientId");
@@ -292,7 +294,83 @@ export default function PortalClienteFormulario() {
 
   const setField = useCallback((key: string, value: any) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
+    setValidationErrors((prev) => {
+      if (prev[key]) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return prev;
+    });
   }, []);
+
+  const STEP_REQUIRED_FIELDS: Record<number, { key: string; label: string }[]> = {
+    1: [
+      { key: "nomeCompleto", label: "Nome Completo" },
+      { key: "cpf", label: "CPF" },
+      { key: "email", label: "E-mail" },
+      { key: "celular", label: "Celular" },
+    ],
+    2: [
+      { key: "cep", label: "CEP" },
+      { key: "logradouro", label: "Logradouro" },
+      { key: "cidade", label: "Cidade" },
+      { key: "uf", label: "UF" },
+    ],
+    3: [
+      { key: "profissao", label: "Profissão" },
+      { key: "rendaMensal", label: "Renda Mensal" },
+    ],
+    4: [
+      { key: "valorSolicitado", label: "Valor Solicitado" },
+      { key: "finalidadeCredito", label: "Finalidade do Crédito" },
+    ],
+  };
+
+  const validateStep = useCallback((step: number): boolean => {
+    const fields = STEP_REQUIRED_FIELDS[step];
+    if (!fields) return true;
+    const errors: Record<string, string> = {};
+    for (const field of fields) {
+      const val = formData[field.key];
+      if (val == null || val === "" || val === 0) {
+        errors[field.key] = `${field.label} é obrigatório`;
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      toast({ title: "Campos obrigatórios", description: "Preencha todos os campos obrigatórios para continuar.", variant: "destructive" });
+      return false;
+    }
+    setValidationErrors({});
+    return true;
+  }, [formData, toast]);
+
+  const validateAllSteps = useCallback((): boolean => {
+    const allErrors: Record<string, string> = {};
+    let firstInvalidStep: number | null = null;
+    for (let step = 1; step <= 4; step++) {
+      const fields = STEP_REQUIRED_FIELDS[step];
+      if (!fields) continue;
+      for (const field of fields) {
+        const val = formData[field.key];
+        if (val == null || val === "" || val === 0) {
+          allErrors[field.key] = `${field.label} é obrigatório`;
+          if (firstInvalidStep === null) firstInvalidStep = step;
+        }
+      }
+    }
+    if (Object.keys(allErrors).length > 0) {
+      setValidationErrors(allErrors);
+      if (firstInvalidStep !== null) {
+        setCurrentStep(firstInvalidStep);
+      }
+      toast({ title: "Campos obrigatórios pendentes", description: "Preencha todos os campos obrigatórios antes de finalizar.", variant: "destructive" });
+      return false;
+    }
+    setValidationErrors({});
+    return true;
+  }, [formData, toast]);
 
   const saveCurrentStep = useCallback(async (nextStep: number) => {
     const data = { ...formData, currentStep: nextStep };
@@ -301,6 +379,7 @@ export default function PortalClienteFormulario() {
 
   const goNext = () => {
     if (currentStep < 6) {
+      if (!validateStep(currentStep)) return;
       const next = currentStep + 1;
       saveCurrentStep(next);
       setCurrentStep(next);
@@ -464,18 +543,78 @@ export default function PortalClienteFormulario() {
 
         {isReadOnly && (
           <Card className="border-green-300 bg-green-50 dark:bg-green-950/30" data-testid="banner-readonly">
-            <CardContent className="p-4 flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-green-800 dark:text-green-300">
-                  {formData.status === "aprovado" ? "Formulário Aprovado" : "Formulário Enviado"}
-                </p>
-                <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
-                  {formData.status === "aprovado"
-                    ? "Seu formulário foi aprovado pela equipe Norion Capital."
-                    : "Seu formulário está em análise. Você será notificado sobre o resultado."}
-                </p>
+            <CardContent className="p-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                    {formData.status === "aprovado" ? "Formulário Aprovado" : "Formulário Enviado"}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
+                    {formData.status === "aprovado"
+                      ? "Seu formulário foi aprovado pela equipe Norion Capital."
+                      : "Seu formulário está em análise pela equipe Norion Capital."}
+                  </p>
+                </div>
               </div>
+
+              {formData.status === "enviado" && (
+                <div className="space-y-3" data-testid="section-proximos-passos">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-green-600" />
+                    <p className="text-xs font-medium text-green-800 dark:text-green-300">Prazo estimado: até 5 dias úteis</p>
+                  </div>
+
+                  <div className="space-y-0" data-testid="timeline-proximos-passos">
+                    {[
+                      { icon: Search, label: "Análise de documentos e dados", description: "Nossa equipe está analisando suas informações", active: true },
+                      { icon: CheckCircle2, label: "Aprovação interna", description: "Parecer sobre a viabilidade da operação", active: false },
+                      { icon: Phone, label: "Contato da equipe", description: "Entraremos em contato para próximos passos", active: false },
+                    ].map((step, idx) => (
+                      <div key={idx} className="flex items-start gap-3" data-testid={`timeline-step-${idx}`}>
+                        <div className="flex flex-col items-center">
+                          <div className={cn(
+                            "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
+                            step.active
+                              ? "bg-green-200 dark:bg-green-800"
+                              : "bg-green-100 dark:bg-green-900/50"
+                          )}>
+                            <step.icon className={cn(
+                              "w-3.5 h-3.5",
+                              step.active
+                                ? "text-green-700 dark:text-green-300"
+                                : "text-green-400 dark:text-green-600"
+                            )} />
+                          </div>
+                          {idx < 2 && (
+                            <div className="w-px h-6 bg-green-200 dark:bg-green-800" />
+                          )}
+                        </div>
+                        <div className="pt-1">
+                          <p className={cn(
+                            "text-xs font-medium",
+                            step.active
+                              ? "text-green-800 dark:text-green-300"
+                              : "text-green-500 dark:text-green-500"
+                          )}>{step.label}</p>
+                          <p className={cn(
+                            "text-[11px]",
+                            step.active
+                              ? "text-green-600 dark:text-green-400"
+                              : "text-green-400 dark:text-green-600"
+                          )}>{step.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="bg-green-100 dark:bg-green-900/40 rounded-md p-3 mt-2" data-testid="info-acompanhar">
+                    <p className="text-[11px] text-green-700 dark:text-green-400">
+                      Acompanhe o status dos seus documentos na aba <span className="font-medium">Documentos</span>. Se necessário, nossa equipe poderá solicitar correções ou documentos adicionais.
+                    </p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -524,10 +663,10 @@ export default function PortalClienteFormulario() {
 
             {currentStep === 1 && (
               <div className="space-y-3" data-testid="step-pessoal">
-                <FieldGroup label="Nome Completo *">
+                <FieldGroup label="Nome Completo *" error={validationErrors.nomeCompleto}>
                   <Input value={formData.nomeCompleto || ""} onChange={(e) => setField("nomeCompleto", e.target.value)} placeholder="Nome completo" disabled={isReadOnly} data-testid="input-nome" />
                 </FieldGroup>
-                <FieldGroup label="CPF *">
+                <FieldGroup label="CPF *" error={validationErrors.cpf}>
                   <Input value={formatTaxId(formData.cpf || "")} onChange={(e) => setField("cpf", e.target.value.replace(/\D/g, ""))} placeholder="000.000.000-00" maxLength={14} disabled={isReadOnly} data-testid="input-cpf" />
                 </FieldGroup>
                 <FieldGroup label="RG">
@@ -550,13 +689,13 @@ export default function PortalClienteFormulario() {
                 <FieldGroup label="Nome da Mãe">
                   <Input value={formData.nomeMae || ""} onChange={(e) => setField("nomeMae", e.target.value)} placeholder="Nome completo da mãe" disabled={isReadOnly} data-testid="input-nome-mae" />
                 </FieldGroup>
-                <FieldGroup label="E-mail *">
+                <FieldGroup label="E-mail *" error={validationErrors.email}>
                   <Input type="email" value={formData.email || ""} onChange={(e) => setField("email", e.target.value)} placeholder="email@exemplo.com" disabled={isReadOnly} data-testid="input-email" />
                 </FieldGroup>
                 <FieldGroup label="Telefone">
                   <Input value={formatPhone(formData.telefone || "")} onChange={(e) => setField("telefone", e.target.value.replace(/\D/g, ""))} placeholder="(00) 0000-0000" maxLength={15} disabled={isReadOnly} data-testid="input-telefone" />
                 </FieldGroup>
-                <FieldGroup label="Celular *">
+                <FieldGroup label="Celular *" error={validationErrors.celular}>
                   <Input value={formatPhone(formData.celular || "")} onChange={(e) => setField("celular", e.target.value.replace(/\D/g, ""))} placeholder="(00) 00000-0000" maxLength={15} disabled={isReadOnly} data-testid="input-celular" />
                 </FieldGroup>
               </div>
@@ -564,13 +703,13 @@ export default function PortalClienteFormulario() {
 
             {currentStep === 2 && (
               <div className="space-y-3" data-testid="step-endereco">
-                <FieldGroup label="CEP *">
+                <FieldGroup label="CEP *" error={validationErrors.cep}>
                   <div className="flex gap-2">
                     <Input value={formatCep(formData.cep || "")} onChange={(e) => setField("cep", e.target.value.replace(/\D/g, ""))} onBlur={lookupCep} placeholder="00000-000" maxLength={9} disabled={isReadOnly} data-testid="input-cep" />
                     {cepLoading && <Loader2 className="w-4 h-4 animate-spin self-center text-amber-500" />}
                   </div>
                 </FieldGroup>
-                <FieldGroup label="Logradouro *">
+                <FieldGroup label="Logradouro *" error={validationErrors.logradouro}>
                   <Input value={formData.logradouro || ""} onChange={(e) => setField("logradouro", e.target.value)} placeholder="Rua, Avenida..." disabled={isReadOnly} data-testid="input-logradouro" />
                 </FieldGroup>
                 <div className="grid grid-cols-3 gap-3">
@@ -588,11 +727,11 @@ export default function PortalClienteFormulario() {
                 </FieldGroup>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="col-span-2">
-                    <FieldGroup label="Cidade *">
+                    <FieldGroup label="Cidade *" error={validationErrors.cidade}>
                       <Input value={formData.cidade || ""} onChange={(e) => setField("cidade", e.target.value)} placeholder="Cidade" disabled={isReadOnly} data-testid="input-cidade" />
                     </FieldGroup>
                   </div>
-                  <FieldGroup label="UF *">
+                  <FieldGroup label="UF *" error={validationErrors.uf}>
                     <Input value={formData.uf || ""} onChange={(e) => setField("uf", e.target.value.toUpperCase())} placeholder="UF" maxLength={2} disabled={isReadOnly} data-testid="input-uf" />
                   </FieldGroup>
                 </div>
@@ -601,7 +740,7 @@ export default function PortalClienteFormulario() {
 
             {currentStep === 3 && (
               <div className="space-y-3" data-testid="step-profissional">
-                <FieldGroup label="Profissão *">
+                <FieldGroup label="Profissão *" error={validationErrors.profissao}>
                   <Input value={formData.profissao || ""} onChange={(e) => setField("profissao", e.target.value)} placeholder="Sua profissão" disabled={isReadOnly} data-testid="input-profissao" />
                 </FieldGroup>
                 <FieldGroup label="Empresa onde Trabalha">
@@ -626,7 +765,7 @@ export default function PortalClienteFormulario() {
                     </div>
                   )}
                 </FieldGroup>
-                <FieldGroup label="Renda Mensal (R$) *">
+                <FieldGroup label="Renda Mensal (R$) *" error={validationErrors.rendaMensal}>
                   <CurrencyInput value={formData.rendaMensal} onChange={(v) => setField("rendaMensal", v)} disabled={isReadOnly} data-testid="input-renda" />
                 </FieldGroup>
                 <FieldGroup label="Tempo de Emprego">
@@ -640,10 +779,10 @@ export default function PortalClienteFormulario() {
 
             {currentStep === 4 && (
               <div className="space-y-3" data-testid="step-credito">
-                <FieldGroup label="Valor Solicitado (R$) *">
+                <FieldGroup label="Valor Solicitado (R$) *" error={validationErrors.valorSolicitado}>
                   <CurrencyInput value={formData.valorSolicitado} onChange={(v) => setField("valorSolicitado", v)} disabled={isReadOnly} data-testid="input-valor-solicitado" />
                 </FieldGroup>
-                <FieldGroup label="Finalidade do Crédito *">
+                <FieldGroup label="Finalidade do Crédito *" error={validationErrors.finalidadeCredito}>
                   <Select value={formData.finalidadeCredito || ""} onValueChange={(v) => setField("finalidadeCredito", v)} disabled={isReadOnly}>
                     <SelectTrigger data-testid="select-finalidade"><SelectValue placeholder="Selecione a finalidade" /></SelectTrigger>
                     <SelectContent>
@@ -794,7 +933,10 @@ export default function PortalClienteFormulario() {
           )}
           {currentStep === 6 && !isReadOnly && (
             <Button
-              onClick={() => finalizarMutation.mutate()}
+              onClick={() => {
+                if (!validateAllSteps()) return;
+                finalizarMutation.mutate();
+              }}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white"
               disabled={finalizarMutation.isPending}
               data-testid="button-finalizar"
@@ -842,11 +984,13 @@ export default function PortalClienteFormulario() {
   );
 }
 
-function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
+function FieldGroup({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs text-slate-600 dark:text-slate-400">{label}</Label>
-      {children}
+      <Label className={cn("text-xs", error ? "text-red-500" : "text-slate-600 dark:text-slate-400")}>{label}</Label>
+      {error && <div className="[&>input]:border-red-400 [&>input]:dark:border-red-500 [&>div>input]:border-red-400 [&>button]:border-red-400">{children}</div>}
+      {!error && children}
+      {error && <p className="text-[11px] text-red-500" data-testid="error-field">{error}</p>}
     </div>
   );
 }
