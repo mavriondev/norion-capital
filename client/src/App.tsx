@@ -21,7 +21,7 @@ import NorionConfiguracoesPage from "@/pages/configuracoes";
 import NorionCafPage from "@/pages/caf";
 import CafNovoPage from "@/pages/caf-novo";
 import CafDetalhePage from "@/pages/caf-detalhe";
-import CafCrawlerPage from "@/pages/caf-crawler";
+import CafConsultarPage from "@/pages/caf-consultar";
 import CafSicorPage from "@/pages/caf-sicor";
 import CafImportarPage from "@/pages/caf-importar";
 import NorionOperacaoNovaPage from "@/pages/operacao-nova";
@@ -125,8 +125,8 @@ function Router() {
       <Route path="/caf/novo">
         <NorionShell><CafNovoPage /></NorionShell>
       </Route>
-      <Route path="/caf/crawler">
-        <NorionShell><CafCrawlerPage /></NorionShell>
+      <Route path="/caf/consultar">
+        <NorionShell><CafConsultarPage /></NorionShell>
       </Route>
       <Route path="/caf/sicor">
         <NorionShell><CafSicorPage /></NorionShell>

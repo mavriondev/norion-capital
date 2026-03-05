@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 export default function NorionSdrPage() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const { data: leads = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/sdr/queue"] });
 
@@ -30,13 +32,13 @@ export default function NorionSdrPage() {
     onError: (err: any) => toast({ title: "Erro", description: err.message, variant: "destructive" }),
   });
 
-  const pendingLeads = (leads as any[]).filter((l: any) => l.status === "new" || l.status === "pending");
+  const pendingLeads = (leads as any[]).filter((l: any) => l.status === "novo" || l.status === "new" || l.status === "pending");
 
   const filtered = pendingLeads.filter((l: any) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
-    const companyName = (l.company?.legalName || l.company?.tradeName || "").toLowerCase();
-    const cnpj = l.company?.cnpj || "";
+    const companyName = (l.legalName || l.tradeName || l.company?.legalName || "").toLowerCase();
+    const cnpj = l.cnpj || l.company?.cnpj || "";
     return companyName.includes(q) || cnpj.includes(q);
   });
 
@@ -82,11 +84,11 @@ export default function NorionSdrPage() {
             <TableBody>
               {filtered.map((l: any) => (
                 <TableRow key={l.id} data-testid={`row-n-lead-${l.id}`}>
-                  <TableCell className="font-medium">{l.company?.legalName || l.company?.tradeName || "—"}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground font-mono">{l.company?.cnpj || "—"}</TableCell>
-                  <TableCell className="text-sm">{l.source || "—"}</TableCell>
+                  <TableCell className="font-medium">{l.legalName || l.tradeName || l.company?.legalName || "—"}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground font-mono">{l.cnpj || l.company?.cnpj || "—"}</TableCell>
+                  <TableCell className="text-sm">{l.source || l.cnaePrincipal || "—"}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="text-xs">{l.status === "new" ? "Novo" : "Pendente"}</Badge>
+                    <Badge variant="outline" className="text-xs">{l.status === "novo" || l.status === "new" ? "Novo" : "Pendente"}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1.5">
@@ -94,6 +96,15 @@ export default function NorionSdrPage() {
                         onClick={() => updateLeadMutation.mutate({ id: l.id, status: "qualified" })}
                         disabled={updateLeadMutation.isPending} data-testid={`button-n-qualify-${l.id}`}>
                         <CheckCircle2 className="w-3 h-3 mr-1" /> Qualificar
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+                        onClick={() => navigate(`/operacoes/nova?companyId=${l.id}`)}
+                        data-testid={`button-n-criar-operacao-${l.id}`}
+                      >
+                        <Plus className="w-3 h-3 mr-1" /> Operação
                       </Button>
                       <Button variant="outline" size="sm" className="h-7 text-xs text-red-500"
                         onClick={() => updateLeadMutation.mutate({ id: l.id, status: "disqualified" })}

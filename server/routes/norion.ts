@@ -1315,6 +1315,81 @@ export function registerNorionRoutes(app: Express, db: any) {
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  app.get("/api/norion/caf/consultar", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const { numeroCAF, cpf, numeroDAPAntigo } = req.query as Record<string, string>;
+
+      if (!numeroCAF && !cpf && !numeroDAPAntigo) {
+        return res.status(400).json({ message: "Informe numeroCAF, numeroDAPAntigo ou cpf para consulta" });
+      }
+
+      let registroLocal: any = null;
+
+      if (numeroCAF) {
+        const [r] = await db.select().from(norionCafRegistros)
+          .where(and(eq(norionCafRegistros.orgId, orgId), eq(norionCafRegistros.numeroCAF, numeroCAF.trim())));
+        registroLocal = r || null;
+      }
+
+      if (!registroLocal && numeroDAPAntigo) {
+        const [r] = await db.select().from(norionCafRegistros)
+          .where(and(eq(norionCafRegistros.orgId, orgId), eq(norionCafRegistros.numeroDAPAntigo, numeroDAPAntigo.trim())));
+        registroLocal = r || null;
+      }
+
+      if (!registroLocal && cpf) {
+        const cpfLimpo = cpf.replace(/\D/g, "");
+        const [r] = await db.select().from(norionCafRegistros)
+          .where(and(eq(norionCafRegistros.orgId, orgId), eq(norionCafRegistros.cpfTitular, cpfLimpo)));
+        registroLocal = r || null;
+      }
+
+      if (registroLocal) {
+        return res.json({ encontrado: true, fonte: "local", dados: registroLocal });
+      }
+
+      if (cpf) {
+        const cpfLimpo = cpf.replace(/\D/g, "");
+        if (cpfLimpo.length === 11) {
+          try {
+            const dapUrl = `https://dap.mda.gov.br/publico/dap/consulta/${cpfLimpo}`;
+            const response = await fetch(dapUrl, {
+              headers: { "User-Agent": "Mozilla/5.0", "Accept": "text/html,application/json" },
+              signal: AbortSignal.timeout(10000),
+            }).catch(() => null);
+            if (response && response.ok) {
+              const text = await response.text();
+              const hasData = text.includes("DAP") || text.includes("dap") || text.includes("Cadastro");
+              if (hasData) {
+                return res.json({
+                  encontrado: true,
+                  fonte: "portal_dap",
+                  mensagem: "Dados encontrados no portal DAP. Consulte o portal para detalhes completos.",
+                  cpf: cpfLimpo,
+                  portalUrl: "https://caf.mda.gov.br/",
+                  dapPortalUrl: "https://dap.mda.gov.br/",
+                });
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      return res.json({
+        encontrado: false,
+        fonte: null,
+        mensagem: "Nenhum registro encontrado. Verifique os dados informados ou consulte diretamente o portal CAF.",
+        portalUrl: "https://caf.mda.gov.br/",
+        dapPortalUrl: "https://dap.mda.gov.br/",
+      });
+
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.get("/api/norion/caf/stats", async (req, res) => {
     try {
       const orgId = getOrgId();
@@ -1521,10 +1596,20 @@ export function registerNorionRoutes(app: Express, db: any) {
       const id = Number(req.params.id);
       const existing = await storage.getCompany(id);
       if (!existing || existing.orgId !== orgId) return res.status(404).json({ message: "Empresa não encontrada" });
-      const updated = await storage.updateCompany(id, req.body);
+
+      const updateData = { ...req.body };
+
+      const camposRelevantes = ["cnaePrincipal", "porte", "cnpj"];
+      const temCampoRelevante = camposRelevantes.some(campo => campo in updateData);
+      if (temCampoRelevante) {
+        const dadosParaPerfil = { ...existing, ...updateData };
+        updateData.norionProfile = calcularPerfil(dadosParaPerfil);
+      }
+
+      const updated = await storage.updateCompany(id, updateData);
       await audit({ orgId, userId: user?.id, userName: user?.username,
         entity: "company", entityId: id, entityTitle: existing.legalName,
-        action: "updated", changes: req.body });
+        action: "updated", changes: updateData });
       res.json(updated);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -1607,20 +1692,6 @@ export function registerNorionRoutes(app: Express, db: any) {
       await storage.updateCompany(id, { tags });
       res.json({ success: true });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
-
-  app.get("/api/caf-extrator/registros", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
-    try {
-      const orgId = getOrgId();
-      const registros = await db.select().from(norionCafRegistros).where(eq(norionCafRegistros.orgId, orgId));
-      res.json(registros);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
-
-  app.post("/api/caf-extrator/varredura", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
-    res.json({ message: "Varredura CAF iniciada. Os resultados serão atualizados automaticamente.", status: "em_andamento" });
   });
 
 }

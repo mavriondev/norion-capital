@@ -15,7 +15,7 @@ Sistema de gestão financeira Norion Capital. Importado do repositório GitHub `
 - Gestão de Fundos (fundos-parceiros, fundo-detalhe, fundo-novo, consulta-fundos)
 - Gestão de Empresas (empresas, empresa-detalhe, empresa-nova)
 - Operações (operacoes, operacao-detalhe, operacao-nova) — com dialog de seleção de empresa
-- CAF (caf, caf-detalhe, caf-novo, caf-importar, caf-crawler, caf-sicor)
+- CAF (caf, caf-detalhe, caf-novo, caf-importar, caf-consultar, caf-sicor)
 - Portal do Cliente (portal-cliente, portal-cliente-dashboard, portal-cliente-formulario, portal-clientes-admin)
 - SDR
 - Relatórios avançados com 3 abas (Visão Geral com gráficos, Pipeline/Funil, Detalhes), filtros por data/empresa/status, exportação CSV
@@ -63,8 +63,7 @@ shared/
 - `/api/cnpj/:cnpj` - CNPJ lookup via BrasilAPI, used by empresa-nova page
 - `/api/sdr/queue` (GET) - SDR leads queue based on company profiles
 - `/api/sdr/leads/:id` (PATCH) - Update SDR lead status
-- `/api/caf-extrator/registros` (GET) - CAF records for crawler
-- `/api/caf-extrator/varredura` (POST) - Trigger CAF scan
+- `/api/norion/caf/consultar` (GET) - Consulta CAF por número CAF, DAP ou CPF (busca local + fallback portal DAP)
 - `/api/norion/cotacoes` (GET) - Cotações BCB PTAX (USD/EUR), indicadores (Selic/CDI/IPCA), commodities agro (AwesomeAPI). Cache de 5 min no servidor.
 - `/api/norion/clima` (GET) - Clima de 5 regiões agrícolas via Open-Meteo (gratuito, sem chave)
 

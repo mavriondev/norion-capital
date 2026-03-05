@@ -1,0 +1,622 @@
+PROMPT PARA O REPLIT
+
+
+Como usar: Copie tudo abaixo da linha pontilhada e cole no chat do Replit (o assistente de IA do Replit). Ele vai executar todas as alterações automaticamente.
+
+
+
+
+
+
+
+Preciso que você faça as seguintes alterações no projeto. Execute todas elas de uma vez, na ordem indicada.
+
+
+
+
+ALTERAÇÃO 1 — Deletar o arquivo do Crawler CAF
+
+Delete o arquivo:
+
+Plain Text
+
+
+client/src/pages/caf-crawler.tsx
+
+
+
+
+
+
+ALTERAÇÃO 2 — Criar novo arquivo de Consulta CAF
+
+Crie o arquivo client/src/pages/caf-consultar.tsx com o seguinte conteúdo:
+
+TSX
+
+
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import {
+  Search, Leaf, ArrowLeft, CheckCircle2, XCircle,
+  ExternalLink, Loader2, AlertTriangle, Database,
+} from "lucide-react";
+
+function formatCurrency(v: number | null | undefined) {
+  if (!v) return "—";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
+
+function formatCpf(v: string | null | undefined) {
+  if (!v) return "—";
+  const d = v.replace(/\D/g, "");
+  if (d.length !== 11) return v;
+  return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+}
+
+export default function CafConsultarPage() {
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const [inputCAF, setInputCAF] = useState("");
+  const [inputCPF, setInputCPF] = useState("");
+  const [inputDAP, setInputDAP] = useState("");
+  const [resultado, setResultado] = useState<any>(null);
+  const [consultando, setConsultando] = useState(false);
+
+  async function handleConsultar() {
+    if (!inputCAF.trim() && !inputCPF.trim() && !inputDAP.trim()) {
+      toast({ title: "Informe pelo menos um campo para consulta", variant: "destructive" });
+      return;
+    }
+    setConsultando(true);
+    setResultado(null);
+    try {
+      const params = new URLSearchParams();
+      if (inputCAF.trim()) params.set("numeroCAF", inputCAF.trim());
+      if (inputCPF.trim()) params.set("cpf", inputCPF.replace(/\D/g, ""));
+      if (inputDAP.trim()) params.set("numeroDAPAntigo", inputDAP.trim());
+      const res = await fetch(`/api/norion/caf/consultar?${params.toString()}`, { credentials: "include" });
+      const data = await res.json();
+      setResultado(data);
+      if (data.encontrado) {
+        toast({ title: "Agricultor encontrado!", description: `Fonte: ${data.fonte === "local" ? "Base local" : "Portal DAP"}` });
+      } else {
+        toast({ title: "Nenhum registro encontrado", variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Erro na consulta", description: err.message, variant: "destructive" });
+    } finally {
+      setConsultando(false);
+    }
+  }
+
+  return (
+    <div className="p-6 space-y-6 max-w-[800px] mx-auto">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" onClick={() => setLocation("/caf")} data-testid="button-voltar-caf">
+          <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
+        </Button>
+        <div className="p-2 bg-green-100 rounded-lg">
+          <Search className="w-6 h-6 text-green-700" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold" data-testid="title-caf-consultar">Consultar Agricultor</h1>
+          <p className="text-sm text-muted-foreground">Busque pelo número do CAF, DAP ou CPF do titular</p>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Leaf className="w-4 h-4 text-green-600" />
+            Dados para Consulta
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <Label className="text-sm">Número CAF</Label>
+              <Input placeholder="Ex: 123456789" value={inputCAF} onChange={(e) => setInputCAF(e.target.value)} data-testid="input-consultar-caf" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm">Número DAP (antigo)</Label>
+              <Input placeholder="Ex: SP-0123456" value={inputDAP} onChange={(e) => setInputDAP(e.target.value)} data-testid="input-consultar-dap" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm">CPF do Titular</Label>
+              <Input placeholder="000.000.000-00" value={inputCPF} onChange={(e) => setInputCPF(e.target.value)} data-testid="input-consultar-cpf" />
+            </div>
+          </div>
+          <div className="flex items-center gap-3 pt-1">
+            <Button onClick={handleConsultar} disabled={consultando} data-testid="button-consultar-caf">
+              {consultando ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Search className="w-4 h-4 mr-1.5" />}
+              {consultando ? "Consultando..." : "Consultar"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => window.open("https://caf.mda.gov.br/", "_blank" )}>
+              <ExternalLink className="w-4 h-4 mr-1.5" /> Portal CAF Oficial
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => window.open("https://dap.mda.gov.br/", "_blank" )}>
+              <ExternalLink className="w-4 h-4 mr-1.5" /> Portal DAP
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {resultado && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                {resultado.encontrado ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <XCircle className="w-4 h-4 text-red-500" />}
+                {resultado.encontrado ? "Agricultor Encontrado" : "Não Encontrado"}
+              </CardTitle>
+              {resultado.encontrado && resultado.fonte && (
+                <Badge variant="outline" className="text-xs">
+                  <Database className="w-3 h-3 mr-1" />
+                  {resultado.fonte === "local" ? "Base Local" : "Portal DAP"}
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!resultado.encontrado && (
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="text-sm text-amber-700 dark:text-amber-400">
+                    <p className="font-medium">Nenhum registro encontrado</p>
+                    <p className="text-xs mt-1">{resultado.mensagem}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => window.open(resultado.portalUrl, "_blank")}>
+                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Consultar no Portal CAF
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setLocation("/caf/novo")}>
+                    <Leaf className="w-3.5 h-3.5 mr-1.5" /> Cadastrar Manualmente
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {resultado.encontrado && resultado.fonte === "portal_dap" && (
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <AlertTriangle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                  <div className="text-sm text-blue-700 dark:text-blue-400">
+                    <p className="font-medium">Registro encontrado no Portal DAP</p>
+                    <p className="text-xs mt-1">{resultado.mensagem}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => window.open(resultado.dapPortalUrl, "_blank")}>
+                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Ver no Portal DAP
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setLocation("/caf/novo")}>
+                    <Leaf className="w-3.5 h-3.5 mr-1.5" /> Cadastrar Manualmente
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {resultado.encontrado && resultado.fonte === "local" && resultado.dados && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div><p className="text-xs text-muted-foreground">Nome do Titular</p><p className="text-sm font-medium">{resultado.dados.nomeTitular || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">CPF</p><p className="text-sm font-mono">{formatCpf(resultado.dados.cpfTitular)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Número CAF</p><p className="text-sm font-mono">{resultado.dados.numeroCAF || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">DAP Antigo</p><p className="text-sm font-mono">{resultado.dados.numeroDAPAntigo || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Grupo PRONAF</p><p className="text-sm">{resultado.dados.grupo || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Validade</p><p className="text-sm">{resultado.dados.validade || "—"}</p></div>
+                </div>
+                <Separator />
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div><p className="text-xs text-muted-foreground">Município / UF</p><p className="text-sm">{[resultado.dados.municipio, resultado.dados.uf].filter(Boolean).join(" / ") || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Área (ha)</p><p className="text-sm">{resultado.dados.areaHa ? `${resultado.dados.areaHa.toLocaleString("pt-BR")} ha` : "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Renda Bruta Anual</p><p className="text-sm">{formatCurrency(resultado.dados.rendaBrutaAnual)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Condição de Posse</p><p className="text-sm">{resultado.dados.condicaoPosse || "—"}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Atividade Principal</p><p className="text-sm">{resultado.dados.atividadePrincipal || "—"}</p></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Status</p>
+                    <Badge variant="outline" className={resultado.dados.status === "ativo" ? "bg-green-100 text-green-700 border-green-300" : "bg-red-100 text-red-700 border-red-300"}>
+                      {resultado.dados.status === "ativo" ? "Ativo" : "Vencido"}
+                    </Badge>
+                  </div>
+                </div>
+                <Separator />
+                <Button onClick={() => setLocation(`/caf/${resultado.dados.id}`)} data-testid="button-ver-detalhe-caf">
+                  <Leaf className="w-4 h-4 mr-1.5" /> Ver Registro Completo
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+
+
+
+
+
+ALTERAÇÃO 3 — Atualizar client/src/App.tsx
+
+No arquivo client/src/App.tsx, faça as seguintes alterações:
+
+3a) Remover o import do Crawler e adicionar o import do Consultar:
+
+Remova esta linha:
+
+TSX
+
+
+import CafCrawlerPage from "@/pages/caf-crawler";
+
+
+
+Adicione esta linha no lugar (junto aos outros imports de CAF):
+
+TSX
+
+
+import CafConsultarPage from "@/pages/caf-consultar";
+
+
+
+3b) Remover a rota do Crawler e adicionar a rota do Consultar:
+
+Remova este bloco:
+
+TSX
+
+
+<Route path="/caf/crawler">
+  <NorionShell><CafCrawlerPage /></NorionShell>
+</Route>
+
+
+
+Adicione este bloco no lugar (antes da rota /caf/:id):
+
+TSX
+
+
+<Route path="/caf/consultar">
+  <NorionShell><CafConsultarPage /></NorionShell>
+</Route>
+
+
+
+
+
+
+ALTERAÇÃO 4 — Atualizar client/src/components/norion-layout.tsx
+
+No arquivo client/src/components/norion-layout.tsx, faça as seguintes alterações:
+
+4a) Adicionar os ícones Leaf e Search nos imports:
+
+Localize a linha de imports de ícones do lucide-react e adicione Leaf e Search:
+
+TSX
+
+
+import {
+  LayoutDashboard, LogOut, DollarSign,
+  Building2, Menu, X, KanbanSquare,
+  Settings2, BarChart3, Landmark, Handshake, Magnet,
+  ChevronDown, FolderOpen, Briefcase, Users, Leaf, Search,
+} from "lucide-react";
+
+
+
+4b) Adicionar o grupo CAF no menu de navegação:
+
+Localize o array navEntries e adicione o grupo CAF antes de { href: "/portal-clientes", ... }:
+
+TSX
+
+
+  {
+    icon: Leaf,
+    label: "CAF / Agro",
+    children: [
+      { href: "/caf/consultar", icon: Search, label: "Consultar CAF", exact: false },
+      { href: "/caf", icon: Leaf, label: "Registros CAF", exact: true },
+    ],
+  },
+
+
+
+
+
+
+ALTERAÇÃO 5 — Atualizar client/src/pages/sdr.tsx
+
+No arquivo client/src/pages/sdr.tsx, faça as seguintes alterações:
+
+5a) Adicionar o import do useLocation:
+
+Adicione esta linha no topo do arquivo (junto aos outros imports):
+
+TSX
+
+
+import { useLocation } from "wouter";
+
+
+
+5b) Adicionar o hook navigate dentro da função NorionSdrPage:
+
+Logo após const { toast } = useToast();, adicione:
+
+TSX
+
+
+const [, navigate] = useLocation();
+
+
+
+5c) Adicionar o botão "Criar Operação" na tabela de leads:
+
+Localize o bloco de botões dentro do TableCell de ações e adicione o botão entre "Qualificar" e "Desqualificar":
+
+TSX
+
+
+<Button
+  variant="default"
+  size="sm"
+  className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+  onClick={() => navigate(`/operacoes/nova?companyId=${l.id}`)}
+  data-testid={`button-n-criar-operacao-${l.id}`}
+>
+  <Plus className="w-3 h-3 mr-1" /> Operação
+</Button>
+
+
+
+
+
+
+ALTERAÇÃO 6 — Atualizar client/src/pages/operacao-nova.tsx
+
+No arquivo client/src/pages/operacao-nova.tsx, faça as seguintes alterações:
+
+6a) Adicionar useEffect nos imports:
+
+Localize a linha:
+
+TSX
+
+
+import { useState, useMemo } from "react";
+
+
+
+Substitua por:
+
+TSX
+
+
+import { useState, useMemo, useEffect } from "react";
+
+
+
+6b) Adicionar o useEffect para pré-selecionar empresa vinda do SDR:
+
+Após a linha const allCompanies = companiesData || [];, adicione:
+
+TSX
+
+
+useEffect(() => {
+  if (!allCompanies.length) return;
+  const params = new URLSearchParams(window.location.search);
+  const companyId = params.get("companyId");
+  if (companyId && !selectedCompany) {
+    const found = allCompanies.find((c: any) => c.id === parseInt(companyId));
+    if (found) setSelectedCompany(found);
+  }
+}, [allCompanies]);
+
+
+
+
+
+
+ALTERAÇÃO 7 — Atualizar server/routes/norion.ts
+
+No arquivo server/routes/norion.ts, faça as seguintes alterações:
+
+7a) Remover os dois endpoints do Crawler no final do arquivo:
+
+Remova completamente estes dois endpoints (localizados no final do arquivo):
+
+TypeScript
+
+
+app.get("/api/caf-extrator/registros", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+  try {
+    const orgId = getOrgId();
+    const registros = await db.select().from(norionCafRegistros).where(eq(norionCafRegistros.orgId, orgId));
+    res.json(registros);
+  } catch (err: any) { res.status(500).json({ message: err.message }); }
+});
+
+app.post("/api/caf-extrator/varredura", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+  res.json({ message: "Varredura CAF iniciada. Os resultados serão atualizados automaticamente.", status: "em_andamento" });
+});
+
+
+
+7b) Adicionar o novo endpoint de consulta individual antes do fechamento da função registerNorionRoutes:
+
+TypeScript
+
+
+app.get("/api/norion/caf/consultar", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+  try {
+    const orgId = getOrgId();
+    const { numeroCAF, cpf, numeroDAPAntigo } = req.query as Record<string, string>;
+
+    if (!numeroCAF && !cpf && !numeroDAPAntigo) {
+      return res.status(400).json({ message: "Informe numeroCAF, numeroDAPAntigo ou cpf para consulta" });
+    }
+
+    let registroLocal: any = null;
+
+    if (numeroCAF) {
+      const [r] = await db.select().from(norionCafRegistros)
+        .where(and(eq(norionCafRegistros.orgId, orgId), eq(norionCafRegistros.numeroCAF, numeroCAF.trim())));
+      registroLocal = r || null;
+    }
+
+    if (!registroLocal && numeroDAPAntigo) {
+      const [r] = await db.select().from(norionCafRegistros)
+        .where(and(eq(norionCafRegistros.orgId, orgId), eq(norionCafRegistros.numeroDAPAntigo, numeroDAPAntigo.trim())));
+      registroLocal = r || null;
+    }
+
+    if (!registroLocal && cpf) {
+      const cpfLimpo = cpf.replace(/\D/g, "");
+      const [r] = await db.select().from(norionCafRegistros)
+        .where(and(eq(norionCafRegistros.orgId, orgId), eq(norionCafRegistros.cpfTitular, cpfLimpo)));
+      registroLocal = r || null;
+    }
+
+    if (registroLocal) {
+      return res.json({ encontrado: true, fonte: "local", dados: registroLocal });
+    }
+
+    if (cpf) {
+      const cpfLimpo = cpf.replace(/\D/g, "");
+      if (cpfLimpo.length === 11) {
+        try {
+          const dapUrl = `https://dap.mda.gov.br/publico/dap/consulta/${cpfLimpo}`;
+          const response = await fetch(dapUrl, {
+            headers: { "User-Agent": "Mozilla/5.0", "Accept": "text/html,application/json" },
+            signal: AbortSignal.timeout(10000 ),
+          }).catch(() => null);
+          if (response && response.ok) {
+            const text = await response.text();
+            const hasData = text.includes("DAP") || text.includes("dap") || text.includes("Cadastro");
+            if (hasData) {
+              return res.json({
+                encontrado: true,
+                fonte: "portal_dap",
+                mensagem: "Dados encontrados no portal DAP. Consulte o portal para detalhes completos.",
+                cpf: cpfLimpo,
+                portalUrl: "https://caf.mda.gov.br/",
+                dapPortalUrl: "https://dap.mda.gov.br/",
+              } );
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    return res.json({
+      encontrado: false,
+      fonte: null,
+      mensagem: "Nenhum registro encontrado. Verifique os dados informados ou consulte diretamente o portal CAF.",
+      portalUrl: "https://caf.mda.gov.br/",
+      dapPortalUrl: "https://dap.mda.gov.br/",
+    } );
+
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+
+7c) Corrigir o endpoint PATCH /api/crm/companies/:id para recalcular perfil automaticamente:
+
+Localize o endpoint app.patch("/api/crm/companies/:id", ...) e substitua pelo código abaixo:
+
+TypeScript
+
+
+app.patch("/api/crm/companies/:id", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+  try {
+    const orgId = getOrgId();
+    const user = req.user as any;
+    const id = Number(req.params.id);
+    const existing = await storage.getCompany(id);
+    if (!existing || existing.orgId !== orgId) return res.status(404).json({ message: "Empresa não encontrada" });
+
+    const updateData = { ...req.body };
+
+    const camposRelevantes = ["cnaePrincipal", "porte", "cnpj"];
+    const temCampoRelevante = camposRelevantes.some(campo => campo in updateData);
+    if (temCampoRelevante) {
+      const dadosParaPerfil = { ...existing, ...updateData };
+      updateData.norionProfile = calcularPerfil(dadosParaPerfil);
+    }
+
+    const updated = await storage.updateCompany(id, updateData);
+    await audit({ orgId, userId: user?.id, userName: user?.username,
+      entity: "company", entityId: id, entityTitle: existing.legalName,
+      action: "updated", changes: updateData });
+    res.json(updated);
+  } catch (err: any) { res.status(500).json({ message: err.message }); }
+});
+
+
+
+
+
+
+ALTERAÇÃO 8 — Atualizar client/src/lib/queryClient.ts
+
+No arquivo client/src/lib/queryClient.ts, localize a linha:
+
+TypeScript
+
+
+staleTime: Infinity,
+
+
+
+Substitua por:
+
+TypeScript
+
+
+staleTime: 5 * 60 * 1000,
+
+
+
+
+
+
+Após fazer todas as alterações, por favor confirme que:
+
+1.
+O arquivo caf-crawler.tsx foi deletado
+
+2.
+O arquivo caf-consultar.tsx foi criado
+
+3.
+Todos os outros arquivos foram atualizados
+
+4.
+O projeto compila sem erros
+

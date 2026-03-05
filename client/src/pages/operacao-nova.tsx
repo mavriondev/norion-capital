@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -146,6 +146,16 @@ export default function OperacaoNovaPage() {
 
   const { data: companiesData } = useQuery<any[]>({ queryKey: ["/api/crm/companies"] });
   const allCompanies = companiesData || [];
+
+  useEffect(() => {
+    if (!allCompanies.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const companyId = params.get("companyId");
+    if (companyId && !selectedCompany) {
+      const found = allCompanies.find((c: any) => c.id === parseInt(companyId));
+      if (found) setSelectedCompany(found);
+    }
+  }, [allCompanies]);
 
   const filtered = allCompanies.filter((c: any) => {
     if (companySearch.length < 2) return false;

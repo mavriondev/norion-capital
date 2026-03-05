@@ -5,7 +5,7 @@ import {
   LayoutDashboard, LogOut, DollarSign,
   Building2, Menu, X, KanbanSquare,
   Settings2, BarChart3, Landmark, Handshake, Magnet,
-  ChevronDown, FolderOpen, Briefcase, Users,
+  ChevronDown, FolderOpen, Briefcase, Users, Leaf, Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -73,6 +73,14 @@ const navEntries: NavEntry[] = [
     children: [
       { href: "/fundos-parceiros", icon: Handshake, label: "Fundos Parceiros", exact: false },
       { href: "/consulta-fundos", icon: Landmark, label: "Consulta Fundos", exact: false },
+    ],
+  },
+  {
+    icon: Leaf,
+    label: "CAF / Agro",
+    children: [
+      { href: "/caf/consultar", icon: Search, label: "Consultar CAF", exact: false },
+      { href: "/caf", icon: Leaf, label: "Registros CAF", exact: true },
     ],
   },
   { href: "/portal-clientes", icon: Users, label: "Portal Clientes", exact: false },
