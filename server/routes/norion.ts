@@ -94,12 +94,89 @@ export const CHECKLIST_IMOVEL = [
   { categoria: "briefing", tipoDocumento: "profissao_tomador", nome: "Profissão do tomador", obrigatorio: true },
 ];
 
-export function getChecklistForOperation(diagnostico: any): typeof CHECKLIST_HOME_EQUITY {
-  const finalidade = (diagnostico?.finalidade || "").toLowerCase().trim();
-  if (finalidade === "agro") return CHECKLIST_AGRO;
-  if (finalidade === "capital de giro") return CHECKLIST_CAPITAL_GIRO;
-  if (finalidade.includes("imóvel") || finalidade.includes("imovel")) return CHECKLIST_IMOVEL;
-  return CHECKLIST_HOME_EQUITY;
+export type ChecklistItem = { categoria: string; tipoDocumento: string; nome: string; obrigatorio: boolean };
+
+export const DOCUMENT_POOLS: Record<string, ChecklistItem[]> = {
+  "Agro": CHECKLIST_AGRO,
+  "Capital de Giro": CHECKLIST_CAPITAL_GIRO,
+  "Imóvel": CHECKLIST_IMOVEL,
+  "Home Equity": CHECKLIST_HOME_EQUITY,
+};
+
+export const MODALIDADES: Record<string, { value: string; label: string; description: string; preChecked: string[] }[]> = {
+  "Agro": [
+    {
+      value: "simplificado",
+      label: "Crédito Rural Simplificado",
+      description: "Documentação básica para crédito rural rápido",
+      preChecked: ["rg_cnh", "notas_fiscais_producao", "inscricao_estadual", "extratos_bancarios", "valor_motivo_credito"],
+    },
+    {
+      value: "completo",
+      label: "Crédito Rural Completo",
+      description: "Documentação completa com propriedade e produção",
+      preChecked: CHECKLIST_AGRO.map(i => i.tipoDocumento),
+    },
+  ],
+  "Capital de Giro": [
+    {
+      value: "simplificado",
+      label: "Antecipação de Recebíveis",
+      description: "Documentação mínima para antecipação rápida",
+      preChecked: ["rg_cnh", "contrato_social", "cartao_cnpj", "extratos_bancarios", "relacao_faturamento_12m", "valor_motivo_credito"],
+    },
+    {
+      value: "completo",
+      label: "Capital de Giro Estruturado",
+      description: "Documentação completa com análise financeira",
+      preChecked: CHECKLIST_CAPITAL_GIRO.map(i => i.tipoDocumento),
+    },
+  ],
+  "Imóvel": [
+    {
+      value: "simplificado",
+      label: "Aquisição Simplificada",
+      description: "Documentação básica para aquisição de imóvel",
+      preChecked: ["rg_cnh", "comprovante_residencia", "matricula_imovel", "iptu", "extratos_bancarios", "irpf", "valor_motivo_credito"],
+    },
+    {
+      value: "completo",
+      label: "Aquisição Completa",
+      description: "Documentação completa com garantia e compra",
+      preChecked: CHECKLIST_IMOVEL.map(i => i.tipoDocumento),
+    },
+  ],
+  "Home Equity": [
+    {
+      value: "simplificado",
+      label: "Home Equity Simplificado",
+      description: "Documentação básica com imóvel em garantia",
+      preChecked: ["rg_cnh", "comprovante_residencia", "matricula_imovel", "iptu", "fotos_imovel", "extratos_bancarios", "irpf", "valor_motivo_credito"],
+    },
+    {
+      value: "completo",
+      label: "Home Equity Completo",
+      description: "Documentação completa para operação estruturada",
+      preChecked: CHECKLIST_HOME_EQUITY.map(i => i.tipoDocumento),
+    },
+  ],
+};
+
+export function getDocumentPool(finalidade: string): ChecklistItem[] {
+  const f = (finalidade || "").toLowerCase().trim();
+  if (f === "agro") return DOCUMENT_POOLS["Agro"];
+  if (f === "capital de giro") return DOCUMENT_POOLS["Capital de Giro"];
+  if (f.includes("imóvel") || f.includes("imovel")) return DOCUMENT_POOLS["Imóvel"];
+  return DOCUMENT_POOLS["Home Equity"];
+}
+
+export function getChecklistForOperation(diagnostico: any): ChecklistItem[] {
+  const pool = getDocumentPool(diagnostico?.finalidade);
+  const selectedDocs: string[] | undefined = diagnostico?.selectedDocuments;
+  if (selectedDocs && Array.isArray(selectedDocs) && selectedDocs.length > 0) {
+    return pool.filter(item => selectedDocs.includes(item.tipoDocumento));
+  }
+  return pool;
 }
 
 const SETORES_ALTO = ["01","02","03","41","42","43","10","11","12","13","14","45","46","47","49","50","51","52"];
@@ -122,6 +199,30 @@ export function registerNorionRoutes(app: Express, db: any) {
   app.use("/api/norion", (req, res, next) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
     next();
+  });
+
+  app.get("/api/norion/modalidades", (_req, res) => {
+    res.json({ modalidades: MODALIDADES, documentPools: DOCUMENT_POOLS });
+  });
+
+  app.post("/api/norion/operations/:id/documents/add", async (req, res) => {
+    try {
+      const orgId = getOrgId();
+      const operationId = Number(req.params.id);
+      const { categoria, tipoDocumento, nome, obrigatorio } = req.body;
+      if (!tipoDocumento || !nome) return res.status(400).json({ message: "tipoDocumento e nome são obrigatórios" });
+      const [op] = await db.select().from(norionOperations).where(and(eq(norionOperations.id, operationId), eq(norionOperations.orgId, orgId)));
+      if (!op) return res.status(404).json({ message: "Operação não encontrada" });
+      const doc = await storage.createNorionDocument({
+        orgId, operationId,
+        categoria: categoria || "outros",
+        tipoDocumento,
+        nome,
+        status: "pendente",
+        obrigatorio: obrigatorio ?? false,
+      });
+      res.json(doc);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
   app.get("/api/norion/operations", async (req, res) => {

@@ -109,6 +109,17 @@ shared/
   - `GET /api/norion/companies/:id/data-sources` — all stored API results
   - `GET /api/norion/companies/:id/operations` — all operations for company
 
+## Modalidades (Operation Sub-types)
+- Each finalidade (Agro, Capital de Giro, Imóvel, Home Equity) has modalidades: "simplificado" and "completo"
+- Modalidade = preset of pre-checked documents from the full pool; user can toggle individual items
+- Backend: `MODALIDADES` and `DOCUMENT_POOLS` in `server/routes/norion.ts`; `GET /api/norion/modalidades` endpoint
+- `POST /api/norion/operations` accepts `diagnostico.modalidade` and `diagnostico.selectedDocuments` (array of tipoDocumento keys)
+- If `selectedDocuments` is provided, only those items are created; otherwise falls back to full checklist (backward compatible)
+- `POST /api/norion/operations/:id/documents/add` — add individual document to existing operation
+- `DELETE /api/norion/documents/:id` — remove document (enforces orgId)
+- Frontend mapping: `getPoolKey(finalidade)` maps "Expansão"/"Equipamentos"/"Outro" → "Home Equity" (matching backend `getDocumentPool`)
+- operacao-detalhe shows modalidade badge, "Adicionar Item" panel, and trash icon on pending docs
+
 ## Theming
 - Dark theme only (no light mode toggle). CSS `:root` vars define dark navy palette (--background: 222 47% 11%)
 - Tailwind `darkMode: ["class"]` is configured but `.dark` class is NOT applied to `<html>` — `dark:` variants never activate

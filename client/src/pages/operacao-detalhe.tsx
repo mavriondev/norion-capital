@@ -11,6 +11,7 @@ import {
   Upload, ExternalLink, Check, XCircle, ChevronDown, ChevronUp,
   User, Home, Wallet, ClipboardList, Handshake, Star,
   Shield, Landmark, FileDown, Leaf, Tractor,
+  Plus, Trash2, Package,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,8 +56,15 @@ const STAGE_BADGE_COLORS: Record<string, string> = {
 const CATEGORIA_CONFIG: Record<string, { label: string; icon: any }> = {
   pessoal: { label: "Dados Pessoais", icon: User },
   imovel: { label: "Imóvel (Garantia)", icon: Home },
+  imovel_garantia: { label: "Imóvel (Garantia)", icon: Home },
+  imovel_compra: { label: "Imóvel (Compra)", icon: Home },
+  propriedade: { label: "Propriedade Rural", icon: Tractor },
+  producao: { label: "Produção", icon: Leaf },
+  empresa: { label: "Empresa", icon: Building2 },
+  financeiro: { label: "Financeiro", icon: Wallet },
   renda: { label: "Comprovação de Renda", icon: Wallet },
   briefing: { label: "Briefing", icon: ClipboardList },
+  outros: { label: "Outros", icon: FileText },
 };
 
 const STATUS_STYLES: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive"; className?: string }> = {
@@ -66,9 +74,10 @@ const STATUS_STYLES: Record<string, { label: string; variant: "default" | "secon
   rejeitado: { label: "Rejeitado", variant: "destructive" },
 };
 
-function DocumentChecklist({ operationId }: { operationId: number }) {
+function DocumentChecklist({ operationId, finalidade }: { operationId: number; finalidade?: string }) {
   const { toast } = useToast();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [showAddPanel, setShowAddPanel] = useState(false);
 
   const { data, isLoading } = useQuery<any>({
     queryKey: ["/api/norion/operations", operationId, "documents"],
@@ -78,6 +87,10 @@ function DocumentChecklist({ operationId }: { operationId: number }) {
       return res.json();
     },
     enabled: !!operationId,
+  });
+
+  const { data: modalidadesData } = useQuery<any>({
+    queryKey: ["/api/norion/modalidades"],
   });
 
   const generateMutation = useMutation({
@@ -116,8 +129,47 @@ function DocumentChecklist({ operationId }: { operationId: number }) {
     onError: (err: any) => toast({ title: "Erro no upload", description: err.message, variant: "destructive" }),
   });
 
+  const addDocMutation = useMutation({
+    mutationFn: async (item: { categoria: string; tipoDocumento: string; nome: string; obrigatorio: boolean }) => {
+      const res = await apiRequest("POST", `/api/norion/operations/${operationId}/documents/add`, item);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/norion/operations", operationId, "documents"] });
+      toast({ title: "Documento adicionado" });
+    },
+    onError: (err: any) => toast({ title: "Erro ao adicionar", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteDocMutation = useMutation({
+    mutationFn: async (docId: number) => {
+      const res = await apiRequest("DELETE", `/api/norion/documents/${docId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/norion/operations", operationId, "documents"] });
+      toast({ title: "Documento removido" });
+    },
+    onError: (err: any) => toast({ title: "Erro ao remover", description: err.message, variant: "destructive" }),
+  });
+
   const docs = data?.documents || [];
   const progress = data?.progress;
+
+  const documentPool = useMemo(() => {
+    if (!modalidadesData?.documentPools || !finalidade) return [];
+    const f = (finalidade || "").toLowerCase().trim();
+    let poolKey = "Home Equity";
+    if (f === "agro") poolKey = "Agro";
+    else if (f === "capital de giro") poolKey = "Capital de Giro";
+    else if (f.includes("imóvel") || f.includes("imovel")) poolKey = "Imóvel";
+    return modalidadesData.documentPools[poolKey] || [];
+  }, [modalidadesData, finalidade]);
+
+  const missingDocs = useMemo(() => {
+    const existingTypes = new Set(docs.map((d: any) => d.tipoDocumento));
+    return documentPool.filter((item: any) => !existingTypes.has(item.tipoDocumento));
+  }, [documentPool, docs]);
 
   if (isLoading) return <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
 
@@ -139,6 +191,11 @@ function DocumentChecklist({ operationId }: { operationId: number }) {
     return acc;
   }, {});
 
+  const allCategories = Object.keys(grouped).sort((a, b) => {
+    const order = ["pessoal", "propriedade", "producao", "empresa", "imovel", "imovel_garantia", "imovel_compra", "financeiro", "renda", "briefing", "outros"];
+    return (order.indexOf(a) === -1 ? 99 : order.indexOf(a)) - (order.indexOf(b) === -1 ? 99 : order.indexOf(b));
+  });
+
   const progressPercent = progress ? Math.round((progress.concluidos / progress.total) * 100) : 0;
 
   const handleFileUpload = (docId: number) => {
@@ -158,6 +215,12 @@ function DocumentChecklist({ operationId }: { operationId: number }) {
     input.click();
   };
 
+  const missingGrouped = missingDocs.reduce((acc: Record<string, any[]>, d: any) => {
+    acc[d.categoria] = acc[d.categoria] || [];
+    acc[d.categoria].push(d);
+    return acc;
+  }, {});
+
   return (
     <div className="space-y-3" data-testid="n-document-checklist">
       <div className="space-y-1.5">
@@ -170,10 +233,10 @@ function DocumentChecklist({ operationId }: { operationId: number }) {
           <p className="text-xs text-amber-400">{progress.obrigatorios - progress.obrigatoriosConcluidos} obrigatório(s) pendente(s)</p>
         )}
       </div>
-      {["pessoal", "imovel", "renda", "briefing"].map(cat => {
+      {allCategories.map(cat => {
         const items = grouped[cat] || [];
         if (items.length === 0) return null;
-        const config = CATEGORIA_CONFIG[cat];
+        const config = CATEGORIA_CONFIG[cat] || { label: cat, icon: FileText };
         const Icon = config.icon;
         const catDone = items.filter((d: any) => d.status === "aprovado" || d.status === "enviado").length;
         const isCollapsed = collapsed[cat];
@@ -204,7 +267,20 @@ function DocumentChecklist({ operationId }: { operationId: number }) {
                           </div>
                           {doc.nomeArquivo && <p className="text-xs text-muted-foreground truncate mt-0.5">{doc.nomeArquivo}</p>}
                         </div>
-                        <Badge variant={st.variant} className={cn("text-[10px] shrink-0", st.className)}>{st.label}</Badge>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Badge variant={st.variant} className={cn("text-[10px]", st.className)}>{st.label}</Badge>
+                          {doc.status === "pendente" && (
+                            <Button
+                              variant="ghost" size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-red-400"
+                              onClick={() => deleteDocMutation.mutate(doc.id)}
+                              disabled={deleteDocMutation.isPending}
+                              data-testid={`button-remove-doc-${doc.id}`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-1 flex-wrap">
                         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleFileUpload(doc.id)} disabled={uploadMutation.isPending}>
@@ -235,6 +311,54 @@ function DocumentChecklist({ operationId }: { operationId: number }) {
           </div>
         );
       })}
+
+      {missingDocs.length > 0 && (
+        <div className="pt-1">
+          <Button
+            variant="outline" size="sm" className="text-xs w-full"
+            onClick={() => setShowAddPanel(!showAddPanel)}
+            data-testid="button-adicionar-item"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1.5" />
+            Adicionar Item ({missingDocs.length} disponíveis)
+          </Button>
+          {showAddPanel && (
+            <div className="mt-2 border rounded-lg p-3 bg-muted/20 space-y-2" data-testid="panel-add-documents">
+              <p className="text-xs text-muted-foreground font-medium">Documentos disponíveis para adicionar:</p>
+              {Object.keys(missingGrouped).sort().map(cat => {
+                const catConfig = CATEGORIA_CONFIG[cat] || { label: cat, icon: FileText };
+                const CatIcon = catConfig.icon;
+                return (
+                  <div key={cat}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <CatIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-xs font-medium text-muted-foreground">{catConfig.label}</span>
+                    </div>
+                    <div className="space-y-1 ml-5">
+                      {missingGrouped[cat].map((item: any) => (
+                        <div key={item.tipoDocumento} className="flex items-center justify-between gap-2 py-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-xs truncate">{item.nome}</span>
+                            {item.obrigatorio && <span className="text-[10px] text-red-500 font-medium shrink-0">*</span>}
+                          </div>
+                          <Button
+                            variant="ghost" size="sm" className="h-6 text-xs shrink-0 text-blue-400"
+                            onClick={() => addDocMutation.mutate(item)}
+                            disabled={addDocMutation.isPending}
+                            data-testid={`button-add-doc-${item.tipoDocumento}`}
+                          >
+                            <Plus className="w-3 h-3 mr-0.5" /> Adicionar
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1025,7 +1149,16 @@ export default function OperacaoDetalhePage({ id }: { id: string }) {
           <Separator />
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div><p className="text-muted-foreground text-xs">Valor Solicitado</p><p className="font-medium">{formatBRL(diag.valorSolicitado)}</p></div>
-            <div><p className="text-muted-foreground text-xs">Finalidade</p><p className="font-medium">{diag.finalidade || "—"}</p></div>
+            <div>
+              <p className="text-muted-foreground text-xs">Finalidade</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="font-medium">{diag.finalidade || "—"}</p>
+                <Badge variant="secondary" className="text-[10px]" data-testid="badge-modalidade">
+                  <Package className="w-3 h-3 mr-0.5" />
+                  {diag.modalidade ? diag.modalidade.charAt(0).toUpperCase() + diag.modalidade.slice(1) : "Completo"}
+                </Badge>
+              </div>
+            </div>
             <div><p className="text-muted-foreground text-xs">Prazo</p><p className="font-medium">{diag.prazo || "—"}</p></div>
             <div><p className="text-muted-foreground text-xs">Faturamento</p><p className="font-medium">{diag.faturamento || "—"}</p></div>
             <div><p className="text-muted-foreground text-xs">Dívida Bancária</p><p className="font-medium">{diag.possuiDivida === true ? "Sim" : diag.possuiDivida === false ? "Não" : "—"}</p></div>
@@ -1056,7 +1189,7 @@ export default function OperacaoDetalhePage({ id }: { id: string }) {
               <ClipboardList className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm font-medium">Checklist Documental</span>
             </div>
-            <DocumentChecklist operationId={op.id} />
+            <DocumentChecklist operationId={op.id} finalidade={diag.finalidade} />
           </div>
           <Separator />
           <EnviosFundosSection operationId={op.id} />

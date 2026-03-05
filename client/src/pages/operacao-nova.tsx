@@ -4,7 +4,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
-  Building2, Plus, X, Loader2, ArrowLeft, Search, MapPin, List,
+  Building2, Plus, X, Loader2, ArrowLeft, Search, MapPin, List, CheckSquare, Square, FileText,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -130,6 +130,28 @@ function CompanyPickerDialog({ companies, onSelect, open, onOpenChange }: {
   );
 }
 
+function getPoolKey(finalidade: string): string {
+  const f = finalidade.toLowerCase().trim();
+  if (f === "agro") return "Agro";
+  if (f === "capital de giro") return "Capital de Giro";
+  if (f.includes("imóvel") || f.includes("imovel") || f === "imóvel") return "Imóvel";
+  return "Home Equity";
+}
+
+const CATEGORIA_LABELS: Record<string, string> = {
+  pessoal: "Pessoal",
+  propriedade: "Propriedade",
+  producao: "Produção",
+  renda: "Renda",
+  briefing: "Briefing",
+  imovel: "Imóvel",
+  imovel_garantia: "Imóvel em Garantia",
+  imovel_compra: "Imóvel a Adquirir",
+  empresa: "Empresa",
+  financeiro: "Financeiro",
+  outros: "Outros",
+};
+
 export default function OperacaoNovaPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -138,6 +160,8 @@ export default function OperacaoNovaPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [valorSolicitado, setValorSolicitado] = useState("");
   const [finalidade, setFinalidade] = useState("");
+  const [modalidade, setModalidade] = useState("");
+  const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [prazo, setPrazo] = useState("");
   const [garantias, setGarantias] = useState<string[]>([]);
   const [faturamento, setFaturamento] = useState("");
@@ -146,6 +170,38 @@ export default function OperacaoNovaPage() {
 
   const { data: companiesData } = useQuery<any[]>({ queryKey: ["/api/crm/companies"] });
   const allCompanies = companiesData || [];
+
+  const { data: modalidadesData } = useQuery<{
+    modalidades: Record<string, { value: string; label: string; description: string; preChecked: string[] }[]>;
+    documentPools: Record<string, { categoria: string; tipoDocumento: string; nome: string; obrigatorio: boolean }[]>;
+  }>({ queryKey: ["/api/norion/modalidades"] });
+
+  const poolKey = finalidade ? getPoolKey(finalidade) : "";
+  const availableModalidades = poolKey ? (modalidadesData?.modalidades?.[poolKey] || []) : [];
+  const documentPool = poolKey ? (modalidadesData?.documentPools?.[poolKey] || []) : [];
+  const hasModalidades = availableModalidades.length > 0;
+
+  const groupedDocs = useMemo(() => {
+    const groups: Record<string, typeof documentPool> = {};
+    for (const doc of documentPool) {
+      if (!groups[doc.categoria]) groups[doc.categoria] = [];
+      groups[doc.categoria].push(doc);
+    }
+    return groups;
+  }, [documentPool]);
+
+  useEffect(() => {
+    setModalidade("");
+    setSelectedDocs([]);
+  }, [finalidade]);
+
+  useEffect(() => {
+    if (!modalidade || !availableModalidades.length) return;
+    const found = availableModalidades.find(m => m.value === modalidade);
+    if (found) {
+      setSelectedDocs([...found.preChecked]);
+    }
+  }, [modalidade]);
 
   useEffect(() => {
     if (!allCompanies.length) return;
@@ -251,6 +307,106 @@ export default function OperacaoNovaPage() {
               <SelectContent>{FINALIDADES.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent>
             </Select>
           </div>
+
+          {hasModalidades && (
+            <div>
+              <Label className="text-sm">Modalidade</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                {availableModalidades.map((m) => {
+                  const isSelected = modalidade === m.value;
+                  return (
+                    <div
+                      key={m.value}
+                      className={`relative p-3 rounded-md border cursor-pointer transition-colors ${
+                        isSelected
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-muted/20 hover-elevate"
+                      }`}
+                      onClick={() => setModalidade(m.value)}
+                      data-testid={`card-modalidade-${m.value}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">{m.label}</span>
+                        <Badge variant="secondary" className="text-[10px] shrink-0">
+                          {m.preChecked.length} docs
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{m.description}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {hasModalidades && documentPool.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                <Label className="text-sm">Documentos</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const allKeys = documentPool.map(d => d.tipoDocumento);
+                    if (selectedDocs.length === allKeys.length) {
+                      setSelectedDocs([]);
+                    } else {
+                      setSelectedDocs(allKeys);
+                    }
+                  }}
+                  data-testid="button-toggle-all-docs"
+                >
+                  {selectedDocs.length === documentPool.length ? (
+                    <><Square className="w-3.5 h-3.5 mr-1.5" />Desmarcar Todos</>
+                  ) : (
+                    <><CheckSquare className="w-3.5 h-3.5 mr-1.5" />Marcar Todos</>
+                  )}
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground mb-3">
+                {selectedDocs.length} de {documentPool.length} documento{documentPool.length !== 1 ? "s" : ""} selecionado{selectedDocs.length !== 1 ? "s" : ""}
+              </div>
+              <div className="rounded-md border bg-slate-800/40 p-3 space-y-4 max-h-[400px] overflow-y-auto">
+                {Object.entries(groupedDocs).map(([categoria, docs]) => (
+                  <div key={categoria}>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                      {CATEGORIA_LABELS[categoria] || categoria}
+                    </div>
+                    <div className="space-y-1">
+                      {docs.map((doc) => {
+                        const isChecked = selectedDocs.includes(doc.tipoDocumento);
+                        return (
+                          <label
+                            key={doc.tipoDocumento}
+                            className="flex items-center gap-2 py-1.5 px-2 rounded-md cursor-pointer hover-elevate"
+                            data-testid={`checkbox-doc-${doc.tipoDocumento}`}
+                          >
+                            <Checkbox
+                              checked={isChecked}
+                              onCheckedChange={() => {
+                                setSelectedDocs(prev =>
+                                  prev.includes(doc.tipoDocumento)
+                                    ? prev.filter(d => d !== doc.tipoDocumento)
+                                    : [...prev, doc.tipoDocumento]
+                                );
+                              }}
+                            />
+                            <span className="text-sm flex-1">{doc.nome}</span>
+                            {doc.obrigatorio && (
+                              <Badge variant="outline" className="text-[10px] shrink-0">
+                                Obrigatório
+                              </Badge>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <Label className="text-sm">Prazo Desejado</Label>
             <Select value={prazo} onValueChange={setPrazo}>
@@ -298,9 +454,15 @@ export default function OperacaoNovaPage() {
             </Link>
             <Button onClick={() => {
               if (!selectedCompany) return toast({ title: "Selecione uma empresa", variant: "destructive" });
+              const diagnosticoPayload: Record<string, any> = {
+                valorSolicitado: parseFloat(valorSolicitado) || 0,
+                finalidade, prazo, garantias, faturamento, possuiDivida,
+              };
+              if (modalidade) diagnosticoPayload.modalidade = modalidade;
+              if (selectedDocs.length > 0) diagnosticoPayload.selectedDocuments = selectedDocs;
               createMutation.mutate({
                 companyId: selectedCompany.id,
-                diagnostico: { valorSolicitado: parseFloat(valorSolicitado) || 0, finalidade, prazo, garantias, faturamento, possuiDivida },
+                diagnostico: diagnosticoPayload,
                 observacoesInternas: observacoes || null,
               });
             }} disabled={createMutation.isPending || !selectedCompany} data-testid="button-n-create-operation">
