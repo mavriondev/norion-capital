@@ -11,10 +11,10 @@ Sistema de gestão financeira Norion Capital. Importado do repositório GitHub `
 - **Routing:** wouter (frontend), Express routes (backend)
 
 ## Key Features
-- Dashboard principal
+- Dashboard rico com KPIs, pipeline, operações recentes, perfil de empresas, cotações (BCB PTAX + indicadores Selic/CDI/IPCA + commodities agro), clima de regiões agrícolas (Open-Meteo)
 - Gestão de Fundos (fundos-parceiros, fundo-detalhe, fundo-novo, consulta-fundos)
 - Gestão de Empresas (empresas, empresa-detalhe, empresa-nova)
-- Operações (operacoes, operacao-detalhe, operacao-nova)
+- Operações (operacoes, operacao-detalhe, operacao-nova) — com dialog de seleção de empresa
 - CAF (caf, caf-detalhe, caf-novo, caf-importar, caf-crawler, caf-sicor)
 - Portal do Cliente (portal-cliente, portal-cliente-dashboard, portal-cliente-formulario, portal-clientes-admin)
 - SDR
@@ -65,6 +65,8 @@ shared/
 - `/api/sdr/leads/:id` (PATCH) - Update SDR lead status
 - `/api/caf-extrator/registros` (GET) - CAF records for crawler
 - `/api/caf-extrator/varredura` (POST) - Trigger CAF scan
+- `/api/norion/cotacoes` (GET) - Cotações BCB PTAX (USD/EUR), indicadores (Selic/CDI/IPCA), commodities agro (AwesomeAPI). Cache de 5 min no servidor.
+- `/api/norion/clima` (GET) - Clima de 5 regiões agrícolas via Open-Meteo (gratuito, sem chave)
 
 ## Routing Notes
 - Detail pages (/operacoes/:id, /empresas/:id, /fundos-parceiros/:id) use useParams wrapper components in App.tsx to pass route params correctly through NorionShell

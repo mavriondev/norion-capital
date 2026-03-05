@@ -183,11 +183,36 @@ export function registerNorionRoutes(app: Express, db: any) {
     try {
       const orgId = getOrgId();
       const ops = await db.select().from(norionOperations).where(eq(norionOperations.orgId, orgId));
+      const allCompanies = await db.select().from(companies).where(eq(companies.orgId, orgId));
       const aprovadas = ops.filter(o => ["aprovado","comissao_gerada"].includes(o.stage));
       const recebidas = ops.filter(o => o.comissaoRecebida);
+
+      const recentOps = ops
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+        .slice(0, 5)
+        .map(o => {
+          const comp = allCompanies.find(c => c.id === o.companyId);
+          return {
+            id: o.id,
+            companyName: comp?.tradeName || comp?.legalName || "—",
+            stage: o.stage,
+            valorSolicitado: (o.diagnostico as any)?.valorSolicitado || 0,
+            valorAprovado: o.valorAprovado,
+            createdAt: o.createdAt,
+          };
+        });
+
+      const profileDist = {
+        alto: allCompanies.filter(c => (c.norionProfile as string)?.toLowerCase() === "alto").length,
+        medio: allCompanies.filter(c => (c.norionProfile as string)?.toLowerCase() === "medio").length,
+        baixo: allCompanies.filter(c => !c.norionProfile || (c.norionProfile as string)?.toLowerCase() === "baixo").length,
+      };
+
       res.json({
         totalOperacoes: ops.length,
+        totalEmpresas: allCompanies.length,
         volumeAprovado: aprovadas.reduce((s, o) => s + (o.valorAprovado || 0), 0),
+        volumeSolicitado: ops.reduce((s, o) => s + ((o.diagnostico as any)?.valorSolicitado || 0), 0),
         comissaoTotal: recebidas.reduce((s, o) => s + (o.valorComissao || 0), 0),
         comissaoAPagar: aprovadas.filter(o => !o.comissaoRecebida).reduce((s, o) => s + (o.valorComissao || 0), 0),
         taxaAprovacao: ops.length > 0 ? Math.round((aprovadas.length / ops.length) * 100) : 0,
@@ -199,8 +224,188 @@ export function registerNorionRoutes(app: Express, db: any) {
           aprovado: ops.filter(o => o.stage === "aprovado").length,
           comissao_gerada: ops.filter(o => o.stage === "comissao_gerada").length,
         },
+        recentOps,
+        profileDist,
       });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  const cotacoesCache: { data: any; timestamp: number } = { data: null, timestamp: 0 };
+  const COTACOES_TTL = 5 * 60 * 1000;
+
+  app.get("/api/norion/cotacoes", async (req, res) => {
+    try {
+      if (cotacoesCache.data && Date.now() - cotacoesCache.timestamp < COTACOES_TTL) {
+        return res.json(cotacoesCache.data);
+      }
+
+      const today = new Date();
+      const dateStr = `${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}-${today.getFullYear()}`;
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = `${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}-${yesterday.getFullYear()}`;
+
+      const bcbSeries: Record<string, { code: number; name: string; unit?: string }> = {
+        USD: { code: 1, name: "Dólar (PTAX)" },
+        EUR: { code: 21619, name: "Euro (PTAX)" },
+        SELIC: { code: 432, name: "Taxa Selic", unit: "% a.a." },
+        CDI: { code: 4389, name: "CDI", unit: "% a.a." },
+        IPCA: { code: 433, name: "IPCA", unit: "% mês" },
+      };
+
+      const currencies: any = {};
+      const indicators: any = {};
+
+      const [dolarRes, euroRes, selicRes, cdiRes, ipcaRes] = await Promise.allSettled([
+        fetch(`https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarDia(dataCotacao=@d)?@d='${dateStr}'&$format=json`),
+        fetch(`https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoMoedaDia(moeda=@m,dataCotacao=@d)?@m='EUR'&@d='${dateStr}'&$format=json`),
+        fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.432/dados/ultimos/2?formato=json`),
+        fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.4389/dados/ultimos/2?formato=json`),
+        fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/2?formato=json`),
+      ]);
+
+      if (dolarRes.status === "fulfilled" && dolarRes.value.ok) {
+        const data = await dolarRes.value.json();
+        const vals = data.value || [];
+        if (vals.length > 0) {
+          currencies.USD = { bid: vals[vals.length - 1].cotacaoVenda, name: "Dólar (PTAX)", pctChange: 0 };
+        }
+      }
+      if (!currencies.USD) {
+        const fallback = await fetch(`https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarDia(dataCotacao=@d)?@d='${yesterdayStr}'&$format=json`);
+        if (fallback.ok) {
+          const data = await fallback.json();
+          const vals = data.value || [];
+          if (vals.length > 0) currencies.USD = { bid: vals[vals.length - 1].cotacaoVenda, name: "Dólar (PTAX)", pctChange: 0 };
+        }
+      }
+
+      if (euroRes.status === "fulfilled" && euroRes.value.ok) {
+        const data = await euroRes.value.json();
+        const vals = data.value || [];
+        if (vals.length > 0) {
+          currencies.EUR = { bid: vals[vals.length - 1].cotacaoVenda, name: "Euro (PTAX)", pctChange: 0 };
+        }
+      }
+      if (!currencies.EUR) {
+        const fallback = await fetch(`https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoMoedaDia(moeda=@m,dataCotacao=@d)?@m='EUR'&@d='${yesterdayStr}'&$format=json`);
+        if (fallback.ok) {
+          const data = await fallback.json();
+          const vals = data.value || [];
+          if (vals.length > 0) currencies.EUR = { bid: vals[vals.length - 1].cotacaoVenda, name: "Euro (PTAX)", pctChange: 0 };
+        }
+      }
+
+      const parseBcbSeries = (result: PromiseSettledResult<Response>, key: string, info: any) => {
+        if (result.status === "fulfilled") {
+          return result.value.json().then((data: any[]) => {
+            if (data && data.length > 0) {
+              const latest = data[data.length - 1];
+              const prev = data.length > 1 ? data[data.length - 2] : null;
+              const val = parseFloat(latest.valor);
+              const prevVal = prev ? parseFloat(prev.valor) : null;
+              indicators[key] = {
+                value: val,
+                name: info.name,
+                unit: info.unit,
+                pctChange: prevVal ? ((val - prevVal) / prevVal) * 100 : 0,
+                date: latest.data,
+              };
+            }
+          }).catch(() => {});
+        }
+      };
+
+      await Promise.all([
+        parseBcbSeries(selicRes, "SELIC", bcbSeries.SELIC),
+        parseBcbSeries(cdiRes, "CDI", bcbSeries.CDI),
+        parseBcbSeries(ipcaRes, "IPCA", bcbSeries.IPCA),
+      ]);
+
+      const commodities: any = {};
+      try {
+        const awesomeRes = await fetch("https://economia.awesomeapi.com.br/last/USD-BRL,EUR-BRL,BTC-BRL");
+        if (awesomeRes.ok) {
+          const aData = await awesomeRes.json();
+          if (aData.USDBRL && !currencies.USD) {
+            currencies.USD = { bid: parseFloat(aData.USDBRL.bid), pctChange: parseFloat(aData.USDBRL.pctChange), name: "Dólar" };
+          } else if (aData.USDBRL && currencies.USD) {
+            currencies.USD.pctChange = parseFloat(aData.USDBRL.pctChange);
+          }
+          if (aData.EURBRL && !currencies.EUR) {
+            currencies.EUR = { bid: parseFloat(aData.EURBRL.bid), pctChange: parseFloat(aData.EURBRL.pctChange), name: "Euro" };
+          } else if (aData.EURBRL && currencies.EUR) {
+            currencies.EUR.pctChange = parseFloat(aData.EURBRL.pctChange);
+          }
+          if (aData.BTCBRL) {
+            currencies.BTC = { bid: parseFloat(aData.BTCBRL.bid), pctChange: parseFloat(aData.BTCBRL.pctChange), name: "Bitcoin" };
+          }
+        }
+      } catch {}
+
+      try {
+        const commRes = await fetch("https://economia.awesomeapi.com.br/last/SOJA-BRL,CAFE-BRL,BOI-BRL,MILHO-BRL");
+        if (commRes.ok) {
+          const cData = await commRes.json();
+          if (cData.SOJABRL) commodities.SOJA = { bid: parseFloat(cData.SOJABRL.bid), pctChange: parseFloat(cData.SOJABRL.pctChange), name: "Soja", unit: "saca 60kg" };
+          if (cData.CAFEBRL) commodities.CAFE = { bid: parseFloat(cData.CAFEBRL.bid), pctChange: parseFloat(cData.CAFEBRL.pctChange), name: "Café", unit: "saca 60kg" };
+          if (cData.BOIBRL) commodities.BOI = { bid: parseFloat(cData.BOIBRL.bid), pctChange: parseFloat(cData.BOIBRL.pctChange), name: "Boi Gordo", unit: "arroba" };
+          if (cData.MILHOBRL) commodities.MILHO = { bid: parseFloat(cData.MILHOBRL.bid), pctChange: parseFloat(cData.MILHOBRL.pctChange), name: "Milho", unit: "saca 60kg" };
+        }
+      } catch {}
+
+      const result = { currencies, commodities, indicators, fetchedAt: new Date().toISOString() };
+      cotacoesCache.data = result;
+      cotacoesCache.timestamp = Date.now();
+      res.json(result);
+    } catch (err: any) {
+      res.json({ currencies: {}, commodities: {}, indicators: {}, fetchedAt: new Date().toISOString(), error: err.message });
+    }
+  });
+
+  app.get("/api/norion/clima", async (req, res) => {
+    try {
+      const cities = [
+        { name: "Ribeirão Preto", state: "SP", lat: -21.17, lon: -47.81 },
+        { name: "Sorriso", state: "MT", lat: -12.55, lon: -55.72 },
+        { name: "Rio Verde", state: "GO", lat: -17.80, lon: -50.92 },
+        { name: "Dourados", state: "MS", lat: -22.22, lon: -54.81 },
+        { name: "Luís Eduardo Magalhães", state: "BA", lat: -12.10, lon: -45.80 },
+      ];
+
+      const results = await Promise.allSettled(
+        cities.map(async (city) => {
+          const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=America/Sao_Paulo&forecast_days=3`;
+          const resp = await fetch(url);
+          if (!resp.ok) return { ...city, current: null, forecast: [] };
+          const w = await resp.json();
+          if (!w.current) return { ...city, current: null, forecast: [] };
+          return {
+            ...city,
+            current: {
+              temperature: w.current.temperature_2m,
+              humidity: w.current.relative_humidity_2m,
+              weatherCode: w.current.weather_code,
+              windSpeed: w.current.wind_speed_10m,
+            },
+            forecast: (w.daily?.time || []).map((t: string, j: number) => ({
+              date: t,
+              tempMax: w.daily.temperature_2m_max?.[j],
+              tempMin: w.daily.temperature_2m_min?.[j],
+              precipitation: w.daily.precipitation_sum?.[j],
+            })),
+          };
+        })
+      );
+
+      const cityResults = results.map((r, i) =>
+        r.status === "fulfilled" ? r.value : { ...cities[i], current: null, forecast: [] }
+      );
+
+      res.json({ cities: cityResults, fetchedAt: new Date().toISOString() });
+    } catch (err: any) {
+      res.json({ cities: [], fetchedAt: new Date().toISOString(), error: err.message });
+    }
   });
 
   app.post("/api/norion/seed-demo", async (req, res) => {
