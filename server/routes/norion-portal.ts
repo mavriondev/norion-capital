@@ -320,6 +320,36 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
           .where(eq(norionClientUsers.id, existing.id))
           .returning();
 
+        const [existingForm] = await db.select().from(norionFormularioCliente)
+          .where(eq(norionFormularioCliente.clientUserId, existing.id));
+        if (!existingForm) {
+          await db.insert(norionFormularioCliente).values({
+            orgId,
+            operationId: existing.operationId || null,
+            clientUserId: existing.id,
+            cpf: cleanTaxId,
+            nomeCompleto: name || existing.name || null,
+            email: email || existing.email || null,
+            telefone: phone || existing.phone || null,
+          });
+        }
+
+        const existingDocs = await db.select().from(norionDocuments)
+          .where(and(eq(norionDocuments.clientUserId, existing.id), eq(norionDocuments.orgId, orgId)));
+        if (existingDocs.length === 0) {
+          const newDocs = CHECKLIST_HOME_EQUITY.map(item => ({
+            orgId,
+            clientUserId: existing.id,
+            operationId: existing.operationId || null as any,
+            categoria: item.categoria,
+            tipoDocumento: item.tipoDocumento,
+            nome: item.nome,
+            obrigatorio: item.obrigatorio,
+            status: "pendente",
+          }));
+          await db.insert(norionDocuments).values(newDocs);
+        }
+
         return res.json({
           clientUser: updated,
           portalUrl: `/portal-cliente`,
@@ -337,6 +367,36 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
         accessToken,
         tokenExpiresAt: expiresAt,
       }).returning();
+
+      const [existingForm] = await db.select().from(norionFormularioCliente)
+        .where(eq(norionFormularioCliente.clientUserId, clientUser.id));
+      if (!existingForm) {
+        await db.insert(norionFormularioCliente).values({
+          orgId,
+          operationId: null,
+          clientUserId: clientUser.id,
+          cpf: cleanTaxId,
+          nomeCompleto: name || null,
+          email: email || null,
+          telefone: phone || null,
+        });
+      }
+
+      const existingDocs = await db.select().from(norionDocuments)
+        .where(and(eq(norionDocuments.clientUserId, clientUser.id), eq(norionDocuments.orgId, orgId)));
+      if (existingDocs.length === 0) {
+        const newDocs = CHECKLIST_HOME_EQUITY.map(item => ({
+          orgId,
+          clientUserId: clientUser.id,
+          operationId: null as any,
+          categoria: item.categoria,
+          tipoDocumento: item.tipoDocumento,
+          nome: item.nome,
+          obrigatorio: item.obrigatorio,
+          status: "pendente",
+        }));
+        await db.insert(norionDocuments).values(newDocs);
+      }
 
       res.json({
         clientUser,
@@ -498,8 +558,14 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
 
   app.get("/api/norion/formularios-pendentes", requireAdminAuth, async (req, res) => {
     try {
+      const orgId = getOrgId();
+      const statusFilter = req.query.status as string | undefined;
+      const conditions: any[] = [eq(norionFormularioCliente.orgId, orgId)];
+      if (statusFilter && statusFilter !== "todos") {
+        conditions.push(eq(norionFormularioCliente.status, statusFilter));
+      }
       const formularios = await db.select().from(norionFormularioCliente)
-        .where(inArray(norionFormularioCliente.status, ["enviado", "em_revisao", "aprovado"]));
+        .where(and(...conditions));
 
       const results = [];
       for (const f of formularios) {

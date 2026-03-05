@@ -108,6 +108,7 @@ function EnviarAcessoTab() {
       setGeneratedTaxId(data.loginTaxId);
       toast({ title: "Acesso gerado com sucesso!" });
       queryClient.invalidateQueries({ queryKey: ["/api/norion/clientes-portal"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/norion/formularios-pendentes"] });
     },
     onError: (err: any) => {
       toast({ title: "Erro", description: err.message, variant: "destructive" });
@@ -330,6 +331,7 @@ function FormulariosTab() {
 
   const counts = {
     todos: (formularios as any[]).length,
+    rascunho: (formularios as any[]).filter((f: any) => f.status === "rascunho").length,
     enviado: (formularios as any[]).filter((f: any) => f.status === "enviado").length,
     em_revisao: (formularios as any[]).filter((f: any) => f.status === "em_revisao").length,
     aprovado: (formularios as any[]).filter((f: any) => f.status === "aprovado").length,
@@ -351,6 +353,7 @@ function FormulariosTab() {
         <div className="flex gap-1.5 flex-wrap">
           {[
             { key: "todos", label: "Todos" },
+            { key: "rascunho", label: "Rascunho" },
             { key: "enviado", label: "Enviados" },
             { key: "em_revisao", label: "Em Revisão" },
             { key: "aprovado", label: "Aprovados" },
