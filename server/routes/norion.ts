@@ -603,27 +603,35 @@ export function registerNorionRoutes(app: Express, db: any) {
   app.get("/api/norion/relatorio-comissoes", async (req, res) => {
     try {
       const orgId = getOrgId();
-      const { de, ate } = req.query;
-      const ops = await db.select().from(norionOperations).where(eq(norionOperations.orgId, orgId));
-      const comEmpresas = await Promise.all(ops.map(async (op) => {
-        const [company] = op.companyId
-          ? await db.select().from(companies).where(eq(companies.id, op.companyId))
-          : [null];
+      const { de, ate, empresa, status } = req.query;
+      const allOps = await db.select().from(norionOperations).where(eq(norionOperations.orgId, orgId));
+      const allCompanies = await db.select().from(companies).where(eq(companies.orgId, orgId));
+
+      const comEmpresas = allOps.map(op => {
+        const company = allCompanies.find(c => c.id === op.companyId) || null;
         return { ...op, company };
-      }));
+      });
+
       const filtradas = comEmpresas.filter(op => {
-        if (!de && !ate) return true;
         const data = op.createdAt ? new Date(op.createdAt) : null;
-        if (!data) return false;
-        if (de && data < new Date(de as string)) return false;
-        if (ate && data > new Date(ate as string)) return false;
+        if (de && data && data < new Date(de as string)) return false;
+        if (ate && data && data > new Date(ate as string + "T23:59:59")) return false;
+        if (empresa && op.companyId !== Number(empresa)) return false;
         return true;
       });
+
       const aprovadas = filtradas.filter(o => ["aprovado","comissao_gerada"].includes(o.stage));
-      const recebidas = filtradas.filter(o => o.comissaoRecebida);
-      const linhas = aprovadas.map(op => ({
-        empresa: op.company?.legalName || op.company?.tradeName || "—",
+
+      let linhasFinais = aprovadas;
+      if (status === "recebida") linhasFinais = aprovadas.filter(o => o.comissaoRecebida);
+      else if (status === "pendente") linhasFinais = aprovadas.filter(o => !o.comissaoRecebida);
+
+      const linhas = linhasFinais.map(op => ({
+        id: op.id,
+        empresa: op.company?.tradeName || op.company?.legalName || "—",
+        legalName: op.company?.legalName || "—",
         cnpj: op.company?.cnpj || "—",
+        valorSolicitado: (op.diagnostico as any)?.valorSolicitado || 0,
         valorAprovado: op.valorAprovado || 0,
         percentualComissao: op.percentualComissao || 0,
         valorComissao: op.valorComissao || 0,
@@ -631,15 +639,53 @@ export function registerNorionRoutes(app: Express, db: any) {
         dataOperacao: op.createdAt,
         dataRecebimento: op.comissaoRecebidaEm,
         stage: op.stage,
+        finalidade: (op.diagnostico as any)?.finalidade || "—",
       }));
+
+      const porEmpresa: Record<string, { total: number; volume: number; comissao: number }> = {};
+      for (const l of linhas) {
+        if (!porEmpresa[l.empresa]) porEmpresa[l.empresa] = { total: 0, volume: 0, comissao: 0 };
+        porEmpresa[l.empresa].total++;
+        porEmpresa[l.empresa].volume += l.valorAprovado;
+        porEmpresa[l.empresa].comissao += l.valorComissao;
+      }
+
+      const porMes: Record<string, { volume: number; comissao: number; count: number }> = {};
+      for (const l of linhas) {
+        if (l.dataOperacao) {
+          const mes = new Date(l.dataOperacao).toISOString().slice(0, 7);
+          if (!porMes[mes]) porMes[mes] = { volume: 0, comissao: 0, count: 0 };
+          porMes[mes].volume += l.valorAprovado;
+          porMes[mes].comissao += l.valorComissao;
+          porMes[mes].count++;
+        }
+      }
+
+      const recebidas = linhasFinais.filter(o => o.comissaoRecebida);
+
       res.json({
         periodo: { de: de || null, ate: ate || null },
-        totalOperacoes: aprovadas.length,
-        volumeAprovado: aprovadas.reduce((s, o) => s + (o.valorAprovado || 0), 0),
-        comissaoTotal: aprovadas.reduce((s, o) => s + (o.valorComissao || 0), 0),
+        totalOperacoes: linhasFinais.length,
+        totalTodasOperacoes: filtradas.length,
+        volumeAprovado: linhasFinais.reduce((s, o) => s + (o.valorAprovado || 0), 0),
+        volumeSolicitado: filtradas.reduce((s, o) => s + ((o.diagnostico as any)?.valorSolicitado || 0), 0),
+        comissaoTotal: linhasFinais.reduce((s, o) => s + (o.valorComissao || 0), 0),
         comissaoRecebida: recebidas.reduce((s, o) => s + (o.valorComissao || 0), 0),
-        comissaoAPagar: aprovadas.filter(o => !o.comissaoRecebida).reduce((s, o) => s + (o.valorComissao || 0), 0),
+        comissaoAPagar: linhasFinais.filter(o => !o.comissaoRecebida).reduce((s, o) => s + (o.valorComissao || 0), 0),
+        ticketMedio: linhasFinais.length > 0 ? Math.round(linhasFinais.reduce((s, o) => s + (o.valorAprovado || 0), 0) / linhasFinais.length) : 0,
+        taxaConversao: filtradas.length > 0 ? Math.round((linhasFinais.length / filtradas.length) * 100) : 0,
+        porEtapa: {
+          identificado: filtradas.filter(o => o.stage === "identificado").length,
+          diagnostico: filtradas.filter(o => o.stage === "diagnostico").length,
+          enviado_fundos: filtradas.filter(o => o.stage === "enviado_fundos").length,
+          em_analise: filtradas.filter(o => o.stage === "em_analise").length,
+          aprovado: filtradas.filter(o => o.stage === "aprovado").length,
+          comissao_gerada: filtradas.filter(o => o.stage === "comissao_gerada").length,
+        },
+        porEmpresa: Object.entries(porEmpresa).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.volume - a.volume),
+        porMes: Object.entries(porMes).map(([mes, data]) => ({ mes, ...data })).sort((a, b) => a.mes.localeCompare(b.mes)),
         linhas,
+        empresasDisponiveis: allCompanies.map(c => ({ id: c.id, name: c.tradeName || c.legalName })),
       });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });

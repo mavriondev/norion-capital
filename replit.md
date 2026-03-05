@@ -18,7 +18,7 @@ Sistema de gestão financeira Norion Capital. Importado do repositório GitHub `
 - CAF (caf, caf-detalhe, caf-novo, caf-importar, caf-crawler, caf-sicor)
 - Portal do Cliente (portal-cliente, portal-cliente-dashboard, portal-cliente-formulario, portal-clientes-admin)
 - SDR
-- Relatórios
+- Relatórios avançados com 3 abas (Visão Geral com gráficos, Pipeline/Funil, Detalhes), filtros por data/empresa/status, exportação CSV
 - Configurações
 - Login com autenticação
 
