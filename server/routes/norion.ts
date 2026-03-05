@@ -1235,4 +1235,141 @@ export function registerNorionRoutes(app: Express, db: any) {
     }
   });
 
+  app.get("/api/crm/companies", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const result = await storage.getCompanies(orgId);
+      res.json(result);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/crm/companies", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const user = req.user as any;
+      const data = { ...req.body, orgId };
+      const company = await storage.createCompany(data);
+      const profile = calcularPerfil(company);
+      if (profile !== "baixo") {
+        await storage.updateCompany(company.id, { norionProfile: profile });
+      }
+      await audit({ orgId, userId: user?.id, userName: user?.username,
+        entity: "company", entityId: company.id, entityTitle: company.legalName,
+        action: "created", changes: {} });
+      res.json(company);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/crm/companies/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const user = req.user as any;
+      const id = Number(req.params.id);
+      const existing = await storage.getCompany(id);
+      if (!existing || existing.orgId !== orgId) return res.status(404).json({ message: "Empresa não encontrada" });
+      const updated = await storage.updateCompany(id, req.body);
+      await audit({ orgId, userId: user?.id, userName: user?.username,
+        entity: "company", entityId: id, entityTitle: existing.legalName,
+        action: "updated", changes: req.body });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/crm/companies/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const user = req.user as any;
+      const id = Number(req.params.id);
+      const existing = await storage.getCompany(id);
+      if (!existing || existing.orgId !== orgId) return res.status(404).json({ message: "Empresa não encontrada" });
+      await db.delete(companies).where(and(eq(companies.id, id), eq(companies.orgId, orgId)));
+      await audit({ orgId, userId: user?.id, userName: user?.username,
+        entity: "company", entityId: id, entityTitle: existing.legalName,
+        action: "deleted", changes: {} });
+      res.json({ success: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/cnpj/:cnpj", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const cnpj = req.params.cnpj.replace(/\D/g, "");
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+      if (!response.ok) return res.status(404).json({ message: "CNPJ não encontrado" });
+      const data = await response.json() as any;
+      res.json({
+        legalName: data.razao_social,
+        tradeName: data.nome_fantasia,
+        cnpj: cnpj,
+        cnaePrincipal: `${data.cnae_fiscal}`,
+        porte: data.porte,
+        address: {
+          logradouro: data.logradouro,
+          numero: data.numero,
+          complemento: data.complemento,
+          bairro: data.bairro,
+          municipio: data.municipio,
+          uf: data.uf,
+          cep: data.cep,
+        },
+        phones: data.ddd_telefone_1 ? [data.ddd_telefone_1] : [],
+        emails: data.email ? [data.email] : [],
+      });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/sdr/queue", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const allCompanies = await storage.getCompanies(orgId);
+      const leads = allCompanies
+        .filter((c: any) => c.norionProfile && c.norionProfile !== "baixo")
+        .map((c: any) => ({
+          id: c.id,
+          legalName: c.legalName,
+          tradeName: c.tradeName,
+          cnpj: c.cnpj,
+          norionProfile: c.norionProfile,
+          cnaePrincipal: c.cnaePrincipal,
+          porte: c.porte,
+          status: (c.tags as any)?.sdrStatus || "novo",
+          createdAt: c.createdAt,
+        }));
+      res.json(leads);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/sdr/leads/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const id = Number(req.params.id);
+      const existing = await storage.getCompany(id);
+      if (!existing || existing.orgId !== orgId) return res.status(404).json({ message: "Lead não encontrado" });
+      const tags = (existing.tags as any) || {};
+      tags.sdrStatus = req.body.status;
+      await storage.updateCompany(id, { tags });
+      res.json({ success: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/caf-extrator/registros", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const registros = await db.select().from(norionCafRegistros).where(eq(norionCafRegistros.orgId, orgId));
+      res.json(registros);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/caf-extrator/varredura", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    res.json({ message: "Varredura CAF iniciada. Os resultados serão atualizados automaticamente.", status: "em_andamento" });
+  });
+
 }

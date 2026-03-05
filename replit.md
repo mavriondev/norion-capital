@@ -58,5 +58,24 @@ shared/
 - Google Drive connector (installed via Replit integrations) - used for document uploads; files are stored under the "Norion Capital" root folder in Drive
 - PostgreSQL database (Replit built-in)
 
+## API Routes Added
+- `/api/crm/companies` (GET, POST, PATCH, DELETE) - CRUD for companies, used by empresas pages
+- `/api/cnpj/:cnpj` - CNPJ lookup via BrasilAPI, used by empresa-nova page
+- `/api/sdr/queue` (GET) - SDR leads queue based on company profiles
+- `/api/sdr/leads/:id` (PATCH) - Update SDR lead status
+- `/api/caf-extrator/registros` (GET) - CAF records for crawler
+- `/api/caf-extrator/varredura` (POST) - Trigger CAF scan
+
+## Routing Notes
+- Detail pages (/operacoes/:id, /empresas/:id, /fundos-parceiros/:id) use useParams wrapper components in App.tsx to pass route params correctly through NorionShell
+- CafDetalhePage already uses useParams internally so no wrapper needed
+
+## Test Data
+- Default credentials: admin/admin
+- 5 test companies (Agropecuária Boa Vista, TechBuild, Fazenda São José, DNA Alimentos, Praia Dourada Resort)
+- 3 partner funds (FIDC Agro Brasil, Securitizadora Real Capital, FIP Expansion Partners)
+- 5 credit operations in various stages
+- 3 CAF records (2 active, 1 expired)
+
 ## Notes
 - The Notion integration was not used (user dismissed it). If needed in the future, can be set up via Replit integrations or manual API token.

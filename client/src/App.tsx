@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation, Redirect } from "wouter";
+import { Switch, Route, useLocation, useParams } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
@@ -59,6 +59,21 @@ function NorionShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+function OperacaoDetalheWrapper() {
+  const params = useParams<{ id: string }>();
+  return <NorionShell><NorionOperacaoDetalhePage id={params.id || ""} /></NorionShell>;
+}
+
+function EmpresaDetalheWrapper() {
+  const params = useParams<{ id: string }>();
+  return <NorionShell><NorionEmpresaDetalhePage id={params.id || ""} /></NorionShell>;
+}
+
+function FundoDetalheWrapper() {
+  const params = useParams<{ id: string }>();
+  return <NorionShell><NorionFundoDetalhePage id={params.id || ""} /></NorionShell>;
+}
+
 function Router() {
   return (
     <Switch>
@@ -74,18 +89,14 @@ function Router() {
       <Route path="/operacoes/nova">
         <NorionShell><NorionOperacaoNovaPage /></NorionShell>
       </Route>
-      <Route path="/operacoes/:id">
-        <NorionShell><NorionOperacaoDetalhePage /></NorionShell>
-      </Route>
+      <Route path="/operacoes/:id" component={OperacaoDetalheWrapper} />
       <Route path="/operacoes">
         <NorionShell><NorionOperacoesPage /></NorionShell>
       </Route>
       <Route path="/empresas/nova">
         <NorionShell><NorionEmpresaNovaPage /></NorionShell>
       </Route>
-      <Route path="/empresas/:id">
-        <NorionShell><NorionEmpresaDetalhePage /></NorionShell>
-      </Route>
+      <Route path="/empresas/:id" component={EmpresaDetalheWrapper} />
       <Route path="/empresas">
         <NorionShell><NorionEmpresasPage /></NorionShell>
       </Route>
@@ -95,9 +106,7 @@ function Router() {
       <Route path="/fundos-parceiros/novo">
         <NorionShell><NorionFundoNovoPage /></NorionShell>
       </Route>
-      <Route path="/fundos-parceiros/:id">
-        <NorionShell><NorionFundoDetalhePage /></NorionShell>
-      </Route>
+      <Route path="/fundos-parceiros/:id" component={FundoDetalheWrapper} />
       <Route path="/fundos-parceiros">
         <NorionShell><NorionFundosParceirosPage /></NorionShell>
       </Route>
