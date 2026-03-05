@@ -40,3 +40,9 @@ waitForPort = 5000
 
 [agent]
 integrations = ["github:1.0.0", "google-drive:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+ANBIMA_CLIENT_ID = "NlX5rLy0mip3"
+ANBIMA_CLIENT_SECRET = "3db07TtOnsLm"
