@@ -226,7 +226,7 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
 
       const accessToken = crypto.randomBytes(16).toString("hex");
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 30);
+      expiresAt.setFullYear(expiresAt.getFullYear() + 2);
 
       if (existing) {
         const [updated] = await db.update(norionClientUsers)
@@ -306,7 +306,7 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
 
       const accessToken = crypto.randomBytes(16).toString("hex");
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 30);
+      expiresAt.setFullYear(expiresAt.getFullYear() + 2);
 
       if (existing) {
         const [updated] = await db.update(norionClientUsers)
