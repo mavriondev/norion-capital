@@ -4,10 +4,14 @@ import {
   users, organizations, companies, orgSettings,
   norionOperations, norionDocuments, norionFundosParceiros, norionEnviosFundos,
   norionCafRegistros, norionClientUsers, norionFormularioCliente,
+  companyApiQueries, companyDataSources, companyTimelineEvents,
   type User, type InsertCompany, type Company,
   type NorionDocument, type InsertNorionDocument,
   type NorionFundoParceiro, type InsertNorionFundoParceiro,
   type NorionEnvioFundo, type InsertNorionEnvioFundo,
+  type CompanyApiQuery, type InsertCompanyApiQuery,
+  type CompanyDataSource, type InsertCompanyDataSource,
+  type CompanyTimelineEvent, type InsertCompanyTimelineEvent,
 } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 import session from "express-session";
@@ -177,6 +181,72 @@ class DatabaseStorage {
 
   async deleteNorionEnviosByOperation(operationId: number, orgId: number) {
     await db.delete(norionEnviosFundos).where(and(eq(norionEnviosFundos.operationId, operationId), eq(norionEnviosFundos.orgId, orgId)));
+  }
+
+  // Métodos para histórico de consultas de APIs
+  async logApiQuery(data: InsertCompanyApiQuery): Promise<CompanyApiQuery> {
+    const [created] = await db.insert(companyApiQueries).values(data).returning();
+    return created;
+  }
+
+  async getApiQueriesForCompany(companyId: number, orgId: number) {
+    return db.select().from(companyApiQueries)
+      .where(and(eq(companyApiQueries.companyId, companyId), eq(companyApiQueries.orgId, orgId)))
+      .orderBy(desc(companyApiQueries.createdAt));
+  }
+
+  async getApiQueriesByType(companyId: number, orgId: number, apiName: string) {
+    return db.select().from(companyApiQueries)
+      .where(and(
+        eq(companyApiQueries.companyId, companyId),
+        eq(companyApiQueries.orgId, orgId),
+        eq(companyApiQueries.apiName, apiName)
+      ))
+      .orderBy(desc(companyApiQueries.createdAt));
+  }
+
+  // Métodos para dados agregados por fonte
+  async aggregateDataSource(data: InsertCompanyDataSource): Promise<CompanyDataSource> {
+    const [created] = await db.insert(companyDataSources).values(data).returning();
+    return created;
+  }
+
+  async getDataSourcesForCompany(companyId: number, orgId: number) {
+    return db.select().from(companyDataSources)
+      .where(and(eq(companyDataSources.companyId, companyId), eq(companyDataSources.orgId, orgId)))
+      .orderBy(desc(companyDataSources.updatedAt));
+  }
+
+  async getDataSourceByType(companyId: number, orgId: number, dataType: string) {
+    const [source] = await db.select().from(companyDataSources)
+      .where(and(
+        eq(companyDataSources.companyId, companyId),
+        eq(companyDataSources.orgId, orgId),
+        eq(companyDataSources.dataType, dataType)
+      ))
+      .orderBy(desc(companyDataSources.updatedAt));
+    return source;
+  }
+
+  async updateDataSource(id: number, orgId: number, data: Partial<CompanyDataSource>) {
+    const [updated] = await db.update(companyDataSources)
+      .set({ ...data, updatedAt: new Date() } as any)
+      .where(and(eq(companyDataSources.id, id), eq(companyDataSources.orgId, orgId)))
+      .returning();
+    return updated;
+  }
+
+  // Métodos para timeline de eventos
+  async createTimelineEvent(data: InsertCompanyTimelineEvent): Promise<CompanyTimelineEvent> {
+    const [created] = await db.insert(companyTimelineEvents).values(data).returning();
+    return created;
+  }
+
+  async getTimelineForCompany(companyId: number, orgId: number, limit: number = 50) {
+    return db.select().from(companyTimelineEvents)
+      .where(and(eq(companyTimelineEvents.companyId, companyId), eq(companyTimelineEvents.orgId, orgId)))
+      .orderBy(desc(companyTimelineEvents.createdAt))
+      .limit(limit);
   }
 }
 

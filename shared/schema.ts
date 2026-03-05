@@ -253,3 +253,57 @@ export const norionFormularioCliente = pgTable("norion_formulario_cliente", {
 export const insertNorionFormularioSchema = createInsertSchema(norionFormularioCliente).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertNorionFormulario = z.infer<typeof insertNorionFormularioSchema>;
 export type NorionFormulario = typeof norionFormularioCliente.$inferSelect;
+
+// Tabela de histórico de consultas de APIs
+export const companyApiQueries = pgTable("company_api_queries", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  orgId: integer("org_id").references(() => organizations.id).notNull(),
+  apiName: text("api_name").notNull(), // "CAF", "SICAR", "SICOR", "IBGE", "Serasa", etc.
+  queryType: text("query_type").notNull(), // "consulta", "atualização", "validação"
+  queryData: jsonb("query_data"), // O que foi consultado (ex: CPF do agricultor)
+  resultData: jsonb("result_data"), // O que retornou
+  status: text("status").notNull().default("sucesso"), // "sucesso", "erro", "parcial"
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: integer("created_by").references(() => users.id),
+});
+export const insertCompanyApiQuerySchema = createInsertSchema(companyApiQueries).omit({ id: true, createdAt: true });
+export type InsertCompanyApiQuery = z.infer<typeof insertCompanyApiQuerySchema>;
+export type CompanyApiQuery = typeof companyApiQueries.$inferSelect;
+
+// Tabela de dados agregados por fonte
+export const companyDataSources = pgTable("company_data_sources", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  orgId: integer("org_id").references(() => organizations.id).notNull(),
+  dataType: text("data_type").notNull(), // "caf", "sicar", "sicor", "formulario_cliente", "embrapa_solo", "serasa_score", etc.
+  sourceData: jsonb("source_data").notNull(), // Os dados completos
+  sourceUrl: text("source_url"), // Link para a consulta original (se houver)
+  validUntil: timestamp("valid_until"), // Quando esse dado expira
+  importanceLevel: text("importance_level").default("informativo"), // "crítico", "importante", "informativo"
+  tags: jsonb("tags").default([]), // ["agro", "ambiental", "fiscal", "comportamental"]
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: integer("created_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertCompanyDataSourceSchema = createInsertSchema(companyDataSources).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCompanyDataSource = z.infer<typeof insertCompanyDataSourceSchema>;
+export type CompanyDataSource = typeof companyDataSources.$inferSelect;
+
+// Tabela de timeline de eventos do cliente
+export const companyTimelineEvents = pgTable("company_timeline_events", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  orgId: integer("org_id").references(() => organizations.id).notNull(),
+  eventType: text("event_type").notNull(), // "consulta_api", "formulario_enviado", "documento_recebido", "operacao_criada", "score_calculado"
+  eventTitle: text("event_title").notNull(),
+  eventDescription: text("event_description"),
+  eventData: jsonb("event_data"), // Dados específicos do evento
+  severity: text("severity").default("info"), // "info", "warning", "success", "error"
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: integer("created_by").references(() => users.id),
+});
+export const insertCompanyTimelineEventSchema = createInsertSchema(companyTimelineEvents).omit({ id: true, createdAt: true });
+export type InsertCompanyTimelineEvent = z.infer<typeof insertCompanyTimelineEventSchema>;
+export type CompanyTimelineEvent = typeof companyTimelineEvents.$inferSelect;

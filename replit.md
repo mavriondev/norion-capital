@@ -78,5 +78,11 @@ shared/
 - 5 credit operations in various stages
 - 3 CAF records (2 active, 1 expired)
 
+## Database Tables (new from GitHub sync)
+- `company_api_queries` — histórico de consultas a APIs externas por empresa (CAF, SICAR, SICOR, etc)
+- `company_data_sources` — dados agregados por fonte para cada empresa
+- `company_timeline_events` — timeline de eventos do cliente (consultas, formulários, documentos, etc)
+
 ## Notes
 - The Notion integration was not used (user dismissed it). If needed in the future, can be set up via Replit integrations or manual API token.
+- GitHub repo: mavriondev/norion-capital (público). Último sync: commit ec85abe3 (company history tracking, data aggregation, permanent portal access)
