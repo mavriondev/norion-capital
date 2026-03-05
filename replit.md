@@ -134,6 +134,7 @@ shared/
 - For existing formulários with empty fields, a "backfill" step runs on each GET: if client has operationId but form has no address/operation data, empty fields are updated from company/operation
 - QSA matching: if client CPF matches a sócio in company enrichmentData.qsa, the sócio's qualificacao is used as profissao
 - All `CHECKLIST_HOME_EQUITY` hardcoded usages replaced with `getChecklistForOperation(diagnostico)` for operation-linked clients; Home Equity remains as fallback for standalone clients without operation context
+- **Step review mode**: Steps 2 (Endereço), 3 (Profissional), 4 (Operação) show compact review cards with green border when key fields are pre-filled, with "Editar" button to expand full form and "Concluir edição" to collapse back. Step indicators show green checks for pre-filled steps. Prefill checks: step 2 = cep+logradouro+cidade+uf; step 3 = empresaTrabalho+profissao; step 4 = valorSolicitado+finalidadeCredito
 
 ## Notes
 - The Notion integration was not used (user dismissed it). If needed in the future, can be set up via Replit integrations or manual API token.

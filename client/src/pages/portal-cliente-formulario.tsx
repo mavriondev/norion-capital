@@ -15,7 +15,7 @@ import {
   CreditCard, Building2, FileText, LogOut, ChevronLeft,
   ChevronRight, AlertTriangle, CheckCircle2, Eye, Camera,
   ChevronDown, ChevronUp, Home, Wallet, ClipboardList,
-  Clock, Search, Phone,
+  Clock, Search, Phone, Pencil,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -203,6 +203,7 @@ export default function PortalClienteFormulario() {
     pessoal: true, imovel: true, renda: true, briefing: true,
   });
   const [uploadingDocId, setUploadingDocId] = useState<number | null>(null);
+  const [editingSteps, setEditingSteps] = useState<Record<number, boolean>>({});
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewDocId, setPreviewDocId] = useState<number | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
@@ -371,6 +372,50 @@ export default function PortalClienteFormulario() {
     setValidationErrors({});
     return true;
   }, [formData, toast]);
+
+  const isStepPrefilled = useCallback((step: number): boolean => {
+    const checks: Record<number, string[]> = {
+      2: ["cep", "logradouro", "cidade", "uf"],
+      3: ["empresaTrabalho", "profissao"],
+      4: ["valorSolicitado", "finalidadeCredito"],
+    };
+    const fields = checks[step];
+    if (!fields) return false;
+    return fields.every(k => {
+      const v = formData[k];
+      return v != null && v !== "" && v !== 0;
+    });
+  }, [formData]);
+
+  const getStepSummary = useCallback((step: number): { label: string; value: string }[] => {
+    const fmt = (v: number) => `R$ ${Number(v).toLocaleString("pt-BR")}`;
+    if (step === 2) {
+      const parts = [formData.logradouro, formData.numero].filter(Boolean).join(", ");
+      const city = [formData.cidade, formData.uf].filter(Boolean).join("/");
+      return [
+        { label: "Endereço", value: parts || "—" },
+        { label: "Bairro", value: formData.bairro || "—" },
+        { label: "Cidade", value: city || "—" },
+        { label: "CEP", value: formData.cep ? formatCep(formData.cep) : "—" },
+      ];
+    }
+    if (step === 3) {
+      return [
+        { label: "Empresa", value: formData.empresaTrabalho || "—" },
+        { label: "CNPJ", value: formData.cnpjEmpresa ? formatTaxId(formData.cnpjEmpresa) : "—" },
+        ...(formData.profissao ? [{ label: "Profissão", value: formData.profissao }] : []),
+      ];
+    }
+    if (step === 4) {
+      return [
+        { label: "Valor Solicitado", value: formData.valorSolicitado ? fmt(formData.valorSolicitado) : "—" },
+        { label: "Finalidade", value: formData.finalidadeCredito || "—" },
+        ...(formData.prazoDesejado ? [{ label: "Prazo", value: formData.prazoDesejado }] : []),
+        ...(formData.tipoGarantia ? [{ label: "Garantia", value: formData.tipoGarantia }] : []),
+      ];
+    }
+    return [];
+  }, [formData]);
 
   const saveCurrentStep = useCallback(async (nextStep: number) => {
     const data = { ...formData, currentStep: nextStep };
@@ -620,26 +665,28 @@ export default function PortalClienteFormulario() {
           <div className="flex gap-1">
             {STEPS.map((step, i) => {
               const StepIcon = step.icon;
-              const isActive = i + 1 === currentStep;
-              const isDone = i + 1 < currentStep;
+              const stepNum = i + 1;
+              const isActive = stepNum === currentStep;
+              const isDone = stepNum < currentStep;
+              const isPrefilled = isStepPrefilled(stepNum) && !editingSteps[stepNum];
               return (
                 <button
                   key={step.key}
                   onClick={() => {
                     if (!isReadOnly) {
-                      saveCurrentStep(i + 1);
-                      setCurrentStep(i + 1);
+                      saveCurrentStep(stepNum);
+                      setCurrentStep(stepNum);
                     }
                   }}
                   className={cn(
                     "flex-1 flex flex-col items-center gap-0.5 py-2 rounded-lg text-[10px] transition-all",
                     isActive && "bg-amber-900/30 text-amber-400 font-medium",
-                    isDone && "text-green-400",
-                    !isActive && !isDone && "text-slate-500",
+                    !isActive && (isDone || isPrefilled) && "text-green-400",
+                    !isActive && !isDone && !isPrefilled && "text-slate-500",
                   )}
                   data-testid={`step-button-${step.key}`}
                 >
-                  {isDone ? <Check className="w-3.5 h-3.5" /> : <StepIcon className="w-3.5 h-3.5" />}
+                  {isDone || isPrefilled ? <Check className="w-3.5 h-3.5" /> : <StepIcon className="w-3.5 h-3.5" />}
                   <span className="hidden sm:block">{step.label}</span>
                 </button>
               );
@@ -694,7 +741,35 @@ export default function PortalClienteFormulario() {
             )}
 
             {currentStep === 2 && (
+              isStepPrefilled(2) && !editingSteps[2] && !isReadOnly ? (
+                <div className="space-y-3" data-testid="step-endereco-review">
+                  <div className="p-3 rounded-lg border border-green-800/50 bg-green-950/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-green-400" />
+                        <span className="text-sm font-medium text-green-300">Dados já cadastrados</span>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => setEditingSteps(prev => ({ ...prev, 2: true }))} className="text-amber-400 hover:text-amber-300 text-xs h-7" data-testid="button-edit-step-2">
+                        <Pencil className="w-3 h-3 mr-1" /> Editar
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {getStepSummary(2).map(item => (
+                        <div key={item.label}>
+                          <p className="text-[11px] text-slate-500">{item.label}</p>
+                          <p className="text-sm text-slate-200">{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
               <div className="space-y-3" data-testid="step-endereco">
+                {editingSteps[2] && (
+                  <Button variant="ghost" size="sm" onClick={() => setEditingSteps(prev => ({ ...prev, 2: false }))} className="text-green-400 hover:text-green-300 text-xs h-7 mb-1" data-testid="button-collapse-step-2">
+                    <Check className="w-3 h-3 mr-1" /> Concluir edição
+                  </Button>
+                )}
                 <FieldGroup label="CEP *" error={validationErrors.cep}>
                   <div className="flex gap-2">
                     <Input value={formatCep(formData.cep || "")} onChange={(e) => setField("cep", e.target.value.replace(/\D/g, ""))} onBlur={lookupCep} placeholder="00000-000" maxLength={9} disabled={isReadOnly} data-testid="input-cep" />
@@ -728,10 +803,48 @@ export default function PortalClienteFormulario() {
                   </FieldGroup>
                 </div>
               </div>
+              )
             )}
 
             {currentStep === 3 && (
+              isStepPrefilled(3) && !editingSteps[3] && !isReadOnly ? (
+                <div className="space-y-3" data-testid="step-profissional-review">
+                  <div className="p-3 rounded-lg border border-green-800/50 bg-green-950/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-green-400" />
+                        <span className="text-sm font-medium text-green-300">Dados já cadastrados</span>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => setEditingSteps(prev => ({ ...prev, 3: true }))} className="text-amber-400 hover:text-amber-300 text-xs h-7" data-testid="button-edit-step-3">
+                        <Pencil className="w-3 h-3 mr-1" /> Editar
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {getStepSummary(3).map(item => (
+                        <div key={item.label}>
+                          <p className="text-[11px] text-slate-500">{item.label}</p>
+                          <p className="text-sm text-slate-200">{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <FieldGroup label="Renda Mensal (R$) *" error={validationErrors.rendaMensal}>
+                    <CurrencyInput value={formData.rendaMensal} onChange={(v) => setField("rendaMensal", v)} disabled={isReadOnly} data-testid="input-renda" />
+                  </FieldGroup>
+                  <FieldGroup label="Tempo de Emprego">
+                    <Input value={formData.tempoEmprego || ""} onChange={(e) => setField("tempoEmprego", e.target.value)} placeholder="Ex: 2 anos e 6 meses" disabled={isReadOnly} data-testid="input-tempo-emprego" />
+                  </FieldGroup>
+                  <FieldGroup label="Outras Rendas">
+                    <Textarea value={formData.outrasRendas || ""} onChange={(e) => setField("outrasRendas", e.target.value)} placeholder="Descreva outras fontes de renda, se houver" rows={2} disabled={isReadOnly} data-testid="input-outras-rendas" />
+                  </FieldGroup>
+                </div>
+              ) : (
               <div className="space-y-3" data-testid="step-profissional">
+                {editingSteps[3] && (
+                  <Button variant="ghost" size="sm" onClick={() => setEditingSteps(prev => ({ ...prev, 3: false }))} className="text-green-400 hover:text-green-300 text-xs h-7 mb-1" data-testid="button-collapse-step-3">
+                    <Check className="w-3 h-3 mr-1" /> Concluir edição
+                  </Button>
+                )}
                 <FieldGroup label="Profissão *" error={validationErrors.profissao}>
                   <Input value={formData.profissao || ""} onChange={(e) => setField("profissao", e.target.value)} placeholder="Sua profissão" disabled={isReadOnly} data-testid="input-profissao" />
                 </FieldGroup>
@@ -767,10 +880,45 @@ export default function PortalClienteFormulario() {
                   <Textarea value={formData.outrasRendas || ""} onChange={(e) => setField("outrasRendas", e.target.value)} placeholder="Descreva outras fontes de renda, se houver" rows={2} disabled={isReadOnly} data-testid="input-outras-rendas" />
                 </FieldGroup>
               </div>
+              )
             )}
 
             {currentStep === 4 && (
+              isStepPrefilled(4) && !editingSteps[4] && !isReadOnly ? (
+                <div className="space-y-3" data-testid="step-credito-review">
+                  <div className="p-3 rounded-lg border border-green-800/50 bg-green-950/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-green-400" />
+                        <span className="text-sm font-medium text-green-300">Dados já cadastrados</span>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => setEditingSteps(prev => ({ ...prev, 4: true }))} className="text-amber-400 hover:text-amber-300 text-xs h-7" data-testid="button-edit-step-4">
+                        <Pencil className="w-3 h-3 mr-1" /> Editar
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {getStepSummary(4).map(item => (
+                        <div key={item.label}>
+                          <p className="text-[11px] text-slate-500">{item.label}</p>
+                          <p className="text-sm text-slate-200">{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <FieldGroup label="Descrição da Garantia">
+                    <Textarea value={formData.descricaoGarantia || ""} onChange={(e) => setField("descricaoGarantia", e.target.value)} placeholder="Descreva a garantia oferecida" rows={2} disabled={isReadOnly} data-testid="input-desc-garantia" />
+                  </FieldGroup>
+                  <FieldGroup label="Valor Estimado da Garantia (R$)">
+                    <CurrencyInput value={formData.valorGarantia} onChange={(v) => setField("valorGarantia", v)} disabled={isReadOnly} data-testid="input-valor-garantia" />
+                  </FieldGroup>
+                </div>
+              ) : (
               <div className="space-y-3" data-testid="step-credito">
+                {editingSteps[4] && (
+                  <Button variant="ghost" size="sm" onClick={() => setEditingSteps(prev => ({ ...prev, 4: false }))} className="text-green-400 hover:text-green-300 text-xs h-7 mb-1" data-testid="button-collapse-step-4">
+                    <Check className="w-3 h-3 mr-1" /> Concluir edição
+                  </Button>
+                )}
                 <FieldGroup label="Valor Solicitado (R$) *" error={validationErrors.valorSolicitado}>
                   <CurrencyInput value={formData.valorSolicitado} onChange={(v) => setField("valorSolicitado", v)} disabled={isReadOnly} data-testid="input-valor-solicitado" />
                 </FieldGroup>
@@ -800,6 +948,7 @@ export default function PortalClienteFormulario() {
                   <CurrencyInput value={formData.valorGarantia} onChange={(v) => setField("valorGarantia", v)} disabled={isReadOnly} data-testid="input-valor-garantia" />
                 </FieldGroup>
               </div>
+              )
             )}
 
             {currentStep === 5 && (

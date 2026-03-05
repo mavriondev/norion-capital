@@ -249,8 +249,13 @@ export default function PortalClienteDashboard() {
           <Card>
             <CardContent className="p-4">
               <p className="text-sm font-medium text-muted-foreground">Operação</p>
-              <p className="font-semibold" data-testid="text-portal-operation">{meData.operation.tipoCredito} - {meData.company?.tradeName || meData.company?.legalName || "—"}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Valor: R$ {Number(meData.operation.valorSolicitado || 0).toLocaleString("pt-BR")}</p>
+              <p className="font-semibold" data-testid="text-portal-operation">{(meData.operation.diagnostico as any)?.finalidade || "Crédito"} - {meData.company?.tradeName || meData.company?.legalName || "—"}</p>
+              {(meData.operation.diagnostico as any)?.valorSolicitado > 0 && (
+                <p className="text-xs text-muted-foreground mt-0.5">Valor: R$ {Number((meData.operation.diagnostico as any).valorSolicitado).toLocaleString("pt-BR")}</p>
+              )}
+              {(meData.operation.diagnostico as any)?.modalidade && (
+                <p className="text-xs text-muted-foreground">Modalidade: {(meData.operation.diagnostico as any).modalidade}</p>
+              )}
             </CardContent>
           </Card>
         )}

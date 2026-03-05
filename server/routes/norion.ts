@@ -176,6 +176,21 @@ export function getChecklistForOperation(diagnostico: any): ChecklistItem[] {
   if (selectedDocs && Array.isArray(selectedDocs) && selectedDocs.length > 0) {
     return pool.filter(item => selectedDocs.includes(item.tipoDocumento));
   }
+  if (diagnostico?.finalidade) {
+    const finalidade = diagnostico.finalidade;
+    const poolKey = Object.keys(MODALIDADES).find(k => {
+      const f = finalidade.toLowerCase();
+      if (k === "Agro" && (f === "agro" || f.includes("rural"))) return true;
+      if (k === "Capital de Giro" && (f === "capital de giro" || f === "capital_giro")) return true;
+      if (k === "Imóvel" && (f.includes("imóvel") || f.includes("imovel"))) return true;
+      if (k === "Home Equity" && (f.includes("home") || f.includes("equity") || f === "expansão" || f === "equipamentos" || f === "outro")) return true;
+      return false;
+    });
+    if (poolKey && MODALIDADES[poolKey]?.[0]?.preChecked) {
+      const simplificado = MODALIDADES[poolKey][0].preChecked;
+      return pool.filter(item => simplificado.includes(item.tipoDocumento));
+    }
+  }
   return pool;
 }
 
