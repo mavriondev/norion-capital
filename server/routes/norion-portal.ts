@@ -3,7 +3,7 @@ import { eq, and, or, inArray } from "drizzle-orm";
 import { norionClientUsers, norionOperations, norionDocuments, norionFormularioCliente, norionFundosParceiros, companies } from "@shared/schema";
 import { getOrgId, audit, storage } from "../storage";
 import { uploadToDrive } from "../google-drive";
-import { CHECKLIST_HOME_EQUITY, getChecklistForOperation } from "./norion";
+import { CHECKLIST_HOME_EQUITY, getChecklistForOperation, getDocumentPool } from "./norion";
 import { enrichCompany } from "../enrichment/company-enrichment";
 import crypto from "crypto";
 
@@ -808,7 +808,8 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
               .where(eq(norionDocuments.id, doc.id));
           }
         } else {
-          for (const item of CHECKLIST_HOME_EQUITY) {
+          const checklist = getChecklistForOperation(diagnostico);
+          for (const item of checklist) {
             await storage.createNorionDocument({
               orgId, operationId: op.id,
               categoria: item.categoria, tipoDocumento: item.tipoDocumento,
@@ -821,7 +822,8 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
           .set({ operationId: op.id })
           .where(eq(norionClientUsers.id, formulario.clientUserId));
       } else {
-        for (const item of CHECKLIST_HOME_EQUITY) {
+        const checklist = getChecklistForOperation(diagnostico);
+        for (const item of checklist) {
           await storage.createNorionDocument({
             orgId, operationId: op.id,
             categoria: item.categoria, tipoDocumento: item.tipoDocumento,
