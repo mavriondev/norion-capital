@@ -1714,8 +1714,13 @@ export function registerNorionRoutes(app: Express, db: any) {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
     try {
       const cnpj = req.params.cnpj.replace(/\D/g, "");
-      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
-      if (!response.ok) return res.status(404).json({ message: "CNPJ não encontrado" });
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, {
+        headers: { "User-Agent": "NorionCapital/1.0", "Accept": "application/json" },
+      });
+      if (!response.ok) {
+        console.log(`[CNPJ] BrasilAPI returned ${response.status} for ${cnpj}`);
+        return res.status(404).json({ message: "CNPJ não encontrado" });
+      }
       const data = await response.json() as any;
       res.json({
         legalName: data.razao_social,

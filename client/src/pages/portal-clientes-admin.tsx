@@ -41,6 +41,8 @@ export default function PortalClientesAdminPage() {
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [generatedTaxId, setGeneratedTaxId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [lookingUpCnpj, setLookingUpCnpj] = useState(false);
+  const [cnpjSource, setCnpjSource] = useState<string | null>(null);
 
   const { data: clientes = [], isLoading: loadingClientes } = useQuery({
     queryKey: ["/api/norion/clientes-portal"],
@@ -68,11 +70,36 @@ export default function PortalClientesAdminPage() {
       setName("");
       setEmail("");
       setPhone("");
+      setCnpjSource(null);
     },
     onError: (err: any) => {
       toast({ title: "Erro", description: err.message, variant: "destructive" });
     },
   });
+
+  const lookupCnpj = async (digits: string) => {
+    if (digits.length !== 14) return;
+    setLookingUpCnpj(true);
+    setCnpjSource(null);
+    try {
+      const res = await apiRequest("GET", `/api/cnpj/${digits}`);
+      const data = await res.json();
+      if (data.legalName || data.tradeName) {
+        setName(data.tradeName || data.legalName || "");
+        if (data.emails?.[0] && !email) setEmail(data.emails[0]);
+        if (data.phones?.[0] && !phone) {
+          const p = data.phones[0].replace(/\D/g, "");
+          setPhone(p.length >= 10 ? `(${p.slice(0,2)}) ${p.slice(2,7)}-${p.slice(7)}` : data.phones[0]);
+        }
+        setCnpjSource("BrasilAPI");
+        toast({ title: "CNPJ encontrado", description: data.tradeName || data.legalName });
+      }
+    } catch {
+      setCnpjSource(null);
+    } finally {
+      setLookingUpCnpj(false);
+    }
+  };
 
   const formatTaxId = (value: string) => {
     const digits = value.replace(/\D/g, "");
@@ -171,13 +198,29 @@ export default function PortalClientesAdminPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-sm">CPF ou CNPJ *</Label>
-              <Input
-                placeholder="000.000.000-00"
-                value={taxId}
-                onChange={(e) => setTaxId(formatTaxId(e.target.value))}
-                maxLength={18}
-                data-testid="input-gerar-taxid"
-              />
+              <div className="relative">
+                <Input
+                  placeholder="000.000.000-00"
+                  value={taxId}
+                  onChange={(e) => {
+                    const formatted = formatTaxId(e.target.value);
+                    setTaxId(formatted);
+                    const digits = e.target.value.replace(/\D/g, "");
+                    if (digits.length === 14) lookupCnpj(digits);
+                    if (digits.length < 14) setCnpjSource(null);
+                  }}
+                  maxLength={18}
+                  data-testid="input-gerar-taxid"
+                />
+                {lookingUpCnpj && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-amber-500" />
+                )}
+              </div>
+              {cnpjSource && (
+                <p className="text-[10px] text-green-600 dark:text-green-400 flex items-center gap-1" data-testid="text-cnpj-found">
+                  <CheckCircle2 className="w-3 h-3" /> Dados preenchidos via {cnpjSource}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label className="text-sm">Nome do cliente</Label>
