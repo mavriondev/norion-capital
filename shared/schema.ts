@@ -49,6 +49,7 @@ export const companies = pgTable("companies", {
   researchNotes: jsonb("research_notes").default([]),
   verifiedContacts: jsonb("verified_contacts").default({}),
   norionProfile: text("norion_profile").default("baixo"),
+  profileScore: integer("profile_score"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

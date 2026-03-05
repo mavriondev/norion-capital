@@ -1,8 +1,9 @@
 import type { Express } from "express";
 import { eq, and, desc, ilike, sql, gte, lte } from "drizzle-orm";
-import { companies, norionOperations, norionDocuments, norionFundosParceiros, norionEnviosFundos, orgSettings, norionCafRegistros, norionFormularioCliente } from "@shared/schema";
+import { companies, norionOperations, norionDocuments, norionFundosParceiros, norionEnviosFundos, orgSettings, norionCafRegistros, norionFormularioCliente, companyDataSources } from "@shared/schema";
 import { storage, getOrgId, audit } from "../storage";
 import { consultarFundoCVM, listarFundosEstruturadosANBIMA, isAnbimaConfigured, clearAnbimaTokenCache, type AnbimaCredentials } from "../enrichment/fundos";
+import { enrichCompany, enrichSource, calcularPerfilEnriquecido } from "../enrichment/company-enrichment";
 import { uploadToDrive } from "../google-drive";
 
 export const CHECKLIST_HOME_EQUITY = [
@@ -1268,6 +1269,14 @@ export function registerNorionRoutes(app: Express, db: any) {
       const operationId = Number(req.params.id);
       const [op] = await db.select().from(norionOperations).where(and(eq(norionOperations.id, operationId), eq(norionOperations.orgId, orgId)));
       if (!op) return res.status(404).json({ message: "Operação não encontrada" });
+
+      let company: any = null;
+      if (op.companyId) {
+        const [c] = await db.select().from(companies).where(eq(companies.id, op.companyId));
+        company = c || null;
+      }
+      const enrichment = (company?.enrichmentData as any) || {};
+
       const fundos = await storage.getNorionFundosParceiros(orgId);
       const ativos = fundos.filter(f => f.ativo !== false);
       const diag = (op.diagnostico as any) || {};
@@ -1314,6 +1323,38 @@ export function registerNorionRoutes(app: Express, db: any) {
 
         score += 15;
         reasons.push("Fundo ativo");
+
+        const profileScore = company?.profileScore || 0;
+        if (profileScore > 65) {
+          score += 10;
+          reasons.push(`Perfil alto (score ${profileScore})`);
+        } else if (profileScore > 40) {
+          score += 5;
+          reasons.push(`Perfil médio (score ${profileScore})`);
+        }
+
+        const situacao = (enrichment?.cnpj?.situacaoCadastral || "").toUpperCase();
+        if (situacao.includes("ATIVA")) {
+          score += 5;
+          reasons.push("Empresa ativa na Receita Federal");
+        }
+
+        const cafData = enrichment?.caf;
+        const qsa = enrichment?.qsa || [];
+        const temDAP = qsa.some((s: any) => s.temDAP) || cafData?.numeroCAF;
+        if (temDAP && finalidade.toLowerCase().includes("agro")) {
+          score += 10;
+          reasons.push("Produtor rural com CAF/DAP ativo");
+        } else if (temDAP) {
+          score += 5;
+          reasons.push("CAF/DAP registrado");
+        }
+
+        const capitalSocial = enrichment?.cnpj?.capitalSocial || 0;
+        if (capitalSocial > 0 && valorSolicitado > 0 && capitalSocial > valorSolicitado * 0.1) {
+          score += 5;
+          reasons.push(`Capital social adequado (R$ ${(capitalSocial / 1000).toFixed(0)}k)`);
+        }
 
         return { fundo: f, score: Math.min(Math.round(score), 100), reasons };
       });
@@ -1664,6 +1705,9 @@ export function registerNorionRoutes(app: Express, db: any) {
       await audit({ orgId, userId: user?.id, userName: user?.username,
         entity: "company", entityId: company.id, entityTitle: company.legalName,
         action: "created", changes: {} });
+      if (company.cnpj) {
+        enrichCompany(company.id, db).catch(err => console.error("[Enrich] Auto-enrich failed for company", company.id, err.message));
+      }
       res.json(company);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -1740,6 +1784,57 @@ export function registerNorionRoutes(app: Express, db: any) {
         phones: data.ddd_telefone_1 ? [data.ddd_telefone_1] : [],
         emails: data.email ? [data.email] : [],
       });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/norion/companies/:id/enrich", async (req, res) => {
+    try {
+      const orgId = getOrgId();
+      const companyId = Number(req.params.id);
+      const [company] = await db.select().from(companies).where(and(eq(companies.id, companyId), eq(companies.orgId, orgId)));
+      if (!company) return res.status(404).json({ message: "Empresa não encontrada" });
+      const result = await enrichCompany(companyId, db);
+      const [updated] = await db.select().from(companies).where(eq(companies.id, companyId));
+      res.json({ ...result, company: updated });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/norion/companies/:id/enrich/:source", async (req, res) => {
+    try {
+      const orgId = getOrgId();
+      const companyId = Number(req.params.id);
+      const sourceType = req.params.source;
+      const [company] = await db.select().from(companies).where(and(eq(companies.id, companyId), eq(companies.orgId, orgId)));
+      if (!company) return res.status(404).json({ message: "Empresa não encontrada" });
+      const data = await enrichSource(companyId, sourceType, db);
+      const [updated] = await db.select().from(companies).where(eq(companies.id, companyId));
+      res.json({ source: sourceType, data, company: updated });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/norion/companies/:id/data-sources", async (req, res) => {
+    try {
+      const orgId = getOrgId();
+      const companyId = Number(req.params.id);
+      const sources = await db.select().from(companyDataSources)
+        .where(and(eq(companyDataSources.companyId, companyId), eq(companyDataSources.orgId, orgId)));
+      res.json(sources);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/norion/companies/:id/operations", async (req, res) => {
+    try {
+      const orgId = getOrgId();
+      const companyId = Number(req.params.id);
+      const ops = await db.select().from(norionOperations)
+        .where(and(eq(norionOperations.companyId, companyId), eq(norionOperations.orgId, orgId)))
+        .orderBy(desc(norionOperations.createdAt));
+      const enriched = await Promise.all(ops.map(async (op) => {
+        const docs = await storage.getNorionDocuments(op.id, orgId);
+        const docProgress = { total: docs.length, concluidos: docs.filter(d => d.status === "aprovado" || d.status === "enviado").length };
+        return { ...op, docProgress };
+      }));
+      res.json(enriched);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

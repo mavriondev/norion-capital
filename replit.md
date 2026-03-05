@@ -45,7 +45,8 @@ server/
   db.ts                - Database connection
   auth.ts              - Authentication setup
   enrichment/
-    fundos.ts          - Fundos enrichment logic
+    fundos.ts          - Fundos enrichment logic (CVM + ANBIMA)
+    company-enrichment.ts - Auto-enrichment service (BrasilAPI, DAP/CAF, SICOR, IBGE)
   google-drive.ts      - Google Drive integration
 
 shared/
@@ -93,6 +94,20 @@ shared/
 - T007: Checklists por tipo de operação (Agro, Capital de Giro, Imóvel, Home Equity)
 - T008: Timeline de próximos passos após envio do formulário
 - Portal Clientes admin simplificado: removida aba Formulários (redundante), mantido geração de acesso + lista de clientes enriquecida com status do formulário, etapa da operação, e busca
+
+## Company Enrichment System
+- Auto-enrichment triggered on company creation (`POST /api/crm/companies`) and formulário criar-operação (fire-and-forget)
+- APIs: BrasilAPI (CNPJ, QSA, CNAE, situação), DAP/CAF (por CPF dos sócios), SICOR/BCB (crédito rural), IBGE (município)
+- Each API result stored individually in `company_data_sources` with timestamps, validity, and tags
+- Profile score (0-100) calculated from enrichment data: CNAE, porte, situação, capital social, CAF/DAP, SICOR, endereço
+- Empresa-detalhe redesigned with 6 tabs: Visão Geral, QSA/Sócios, CAF/DAP, SICOR, IBGE, Operações
+- Each tab has individual "Atualizar" button calling `POST /api/norion/companies/:id/enrich/:source`
+- Matching com fundos enriquecido: score de perfil, situação ativa, CAF/DAP, capital social como fatores adicionais
+- Endpoints:
+  - `POST /api/norion/companies/:id/enrich` — full enrichment
+  - `POST /api/norion/companies/:id/enrich/:source` — single source (brasilapi, dap_caf, sicor, ibge)
+  - `GET /api/norion/companies/:id/data-sources` — all stored API results
+  - `GET /api/norion/companies/:id/operations` — all operations for company
 
 ## Notes
 - The Notion integration was not used (user dismissed it). If needed in the future, can be set up via Replit integrations or manual API token.

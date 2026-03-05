@@ -4,6 +4,7 @@ import { norionClientUsers, norionOperations, norionDocuments, norionFormularioC
 import { getOrgId, audit, storage } from "../storage";
 import { uploadToDrive } from "../google-drive";
 import { CHECKLIST_HOME_EQUITY, getChecklistForOperation } from "./norion";
+import { enrichCompany } from "../enrichment/company-enrichment";
 import crypto from "crypto";
 
 export function registerNorionPortalRoutes(app: Express, db: any) {
@@ -763,6 +764,8 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
       }
 
       if (!companyId) return res.status(400).json({ message: "Não foi possível identificar empresa/pessoa do formulário" });
+
+      enrichCompany(companyId, db).catch(err => console.error("[Enrich] Auto-enrich failed for company", companyId, err.message));
 
       const garantias: string[] = [];
       if (formulario.tipoGarantia) garantias.push(formulario.tipoGarantia);
