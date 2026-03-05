@@ -104,15 +104,20 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
       const docs = await db.select().from(norionDocuments)
         .where(and(...conditions));
 
-      if (docs.length === 0 && !client.operationId) {
+      if (docs.length === 0) {
         const existing = await db.select().from(norionDocuments)
           .where(and(eq(norionDocuments.clientUserId, client.id), eq(norionDocuments.orgId, orgId)));
 
         if (existing.length === 0) {
-          const newDocs = CHECKLIST_HOME_EQUITY.map(item => ({
+          let checklist = CHECKLIST_HOME_EQUITY;
+          if (client.operationId) {
+            const [linkedOp] = await db.select().from(norionOperations).where(eq(norionOperations.id, client.operationId));
+            if (linkedOp?.diagnostico) checklist = getChecklistForOperation(linkedOp.diagnostico);
+          }
+          const newDocs = checklist.map(item => ({
             orgId,
             clientUserId: client.id,
-            operationId: null as any,
+            operationId: client.operationId || null as any,
             categoria: item.categoria,
             tipoDocumento: item.tipoDocumento,
             nome: item.nome,
@@ -336,21 +341,24 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
         const [existingForm] = await db.select().from(norionFormularioCliente)
           .where(eq(norionFormularioCliente.clientUserId, existing.id));
         if (!existingForm) {
-          await db.insert(norionFormularioCliente).values({
-            orgId,
-            operationId: existing.operationId || null,
-            clientUserId: existing.id,
-            cpf: cleanTaxId,
-            nomeCompleto: name || existing.name || null,
-            email: email || existing.email || null,
-            telefone: phone || existing.phone || null,
+          const prefill = await buildPrefillData({
+            ...existing,
+            name: name || existing.name,
+            email: email || existing.email,
+            phone: phone || existing.phone,
           });
+          await db.insert(norionFormularioCliente).values(prefill);
         }
 
         const existingDocs = await db.select().from(norionDocuments)
           .where(and(eq(norionDocuments.clientUserId, existing.id), eq(norionDocuments.orgId, orgId)));
         if (existingDocs.length === 0) {
-          const newDocs = CHECKLIST_HOME_EQUITY.map(item => ({
+          let docChecklist = CHECKLIST_HOME_EQUITY;
+          if (existing.operationId) {
+            const [linkedOp] = await db.select().from(norionOperations).where(eq(norionOperations.id, existing.operationId));
+            if (linkedOp?.diagnostico) docChecklist = getChecklistForOperation(linkedOp.diagnostico);
+          }
+          const newDocs = docChecklist.map(item => ({
             orgId,
             clientUserId: existing.id,
             operationId: existing.operationId || null as any,
@@ -384,15 +392,8 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
       const [existingForm] = await db.select().from(norionFormularioCliente)
         .where(eq(norionFormularioCliente.clientUserId, clientUser.id));
       if (!existingForm) {
-        await db.insert(norionFormularioCliente).values({
-          orgId,
-          operationId: null,
-          clientUserId: clientUser.id,
-          cpf: cleanTaxId,
-          nomeCompleto: name || null,
-          email: email || null,
-          telefone: phone || null,
-        });
+        const prefill = await buildPrefillData(clientUser);
+        await db.insert(norionFormularioCliente).values(prefill);
       }
 
       const existingDocs = await db.select().from(norionDocuments)
@@ -519,23 +520,101 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
     }
   });
 
+  async function buildPrefillData(client: any) {
+    const prefill: any = {
+      orgId: client.orgId,
+      operationId: client.operationId || null,
+      clientUserId: client.id,
+      cpf: client.taxId,
+      nomeCompleto: client.name || null,
+      email: client.email || null,
+      telefone: client.phone || null,
+    };
+
+    if (!client.operationId) return prefill;
+
+    const [op] = await db.select().from(norionOperations).where(eq(norionOperations.id, client.operationId));
+    if (!op) return prefill;
+
+    const diag = op.diagnostico as any;
+    if (diag) {
+      if (diag.valorSolicitado) prefill.valorSolicitado = diag.valorSolicitado;
+      if (diag.finalidade) prefill.finalidadeCredito = diag.finalidade;
+      if (diag.prazo) prefill.prazoDesejado = diag.prazo;
+      if (diag.garantias?.length) {
+        prefill.tipoGarantia = diag.garantias[0];
+        prefill.descricaoGarantia = diag.garantias.join(", ");
+      }
+    }
+
+    if (!op.companyId) return prefill;
+
+    const [company] = await db.select().from(companies).where(eq(companies.id, op.companyId));
+    if (!company) return prefill;
+
+    prefill.empresaTrabalho = company.tradeName || company.legalName;
+    prefill.cnpjEmpresa = company.cnpj || null;
+
+    const addr = (company.address as any) || {};
+    if (addr.logradouro) prefill.logradouro = addr.logradouro;
+    if (addr.numero) prefill.numero = addr.numero;
+    if (addr.complemento) prefill.complemento = addr.complemento;
+    if (addr.bairro) prefill.bairro = addr.bairro;
+    if (addr.municipio) prefill.cidade = addr.municipio;
+    if (addr.uf) prefill.uf = addr.uf;
+    if (addr.cep) prefill.cep = String(addr.cep).replace(/\D/g, "");
+
+    const enrichment = company.enrichmentData as any;
+    if (enrichment?.qsa?.length && client.taxId) {
+      const cleanCpf = client.taxId.replace(/\D/g, "");
+      const socio = enrichment.qsa.find((s: any) => {
+        const scpf = (s.cpfCnpj || "").replace(/\D/g, "");
+        return scpf.length >= 11 && cleanCpf.endsWith(scpf.slice(-8));
+      });
+      if (socio) {
+        if (socio.qualificacao && !prefill.profissao) prefill.profissao = socio.qualificacao;
+        if (socio.nome && !prefill.nomeCompleto) prefill.nomeCompleto = socio.nome;
+      }
+    }
+
+    return prefill;
+  }
+
   app.get("/api/norion-portal/formulario", portalAuth, async (req: any, res) => {
     try {
       const client = req.portalClient;
       const [existing] = await db.select().from(norionFormularioCliente)
         .where(eq(norionFormularioCliente.clientUserId, client.id));
 
-      if (existing) return res.json(existing);
+      if (existing) {
+        const needsBackfill = client.operationId && !existing.logradouro && !existing.valorSolicitado && !existing.empresaTrabalho;
+        if (needsBackfill) {
+          const prefill = await buildPrefillData(client);
+          const backfillFields: any = {};
+          const fieldsToBackfill = [
+            "logradouro", "numero", "complemento", "bairro", "cidade", "uf", "cep",
+            "empresaTrabalho", "cnpjEmpresa", "valorSolicitado", "finalidadeCredito",
+            "prazoDesejado", "tipoGarantia", "descricaoGarantia", "profissao",
+          ];
+          for (const key of fieldsToBackfill) {
+            if (prefill[key] && !existing[key as keyof typeof existing]) {
+              backfillFields[key] = prefill[key];
+            }
+          }
+          if (Object.keys(backfillFields).length > 0) {
+            backfillFields.updatedAt = new Date();
+            const [updated] = await db.update(norionFormularioCliente)
+              .set(backfillFields)
+              .where(eq(norionFormularioCliente.id, existing.id))
+              .returning();
+            return res.json(updated);
+          }
+        }
+        return res.json(existing);
+      }
 
-      const [created] = await db.insert(norionFormularioCliente).values({
-        orgId: client.orgId,
-        operationId: client.operationId || null,
-        clientUserId: client.id,
-        cpf: client.taxId,
-        nomeCompleto: client.name || null,
-        email: client.email || null,
-        telefone: client.phone || null,
-      }).returning();
+      const prefill = await buildPrefillData(client);
+      const [created] = await db.insert(norionFormularioCliente).values(prefill).returning();
 
       res.json(created);
     } catch (err: any) {

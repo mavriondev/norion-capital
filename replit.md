@@ -127,6 +127,13 @@ shared/
 - No `dark:` prefix variants in page components — only in shadcn ui library components
 - Portal client pages (portal-cliente-*) have their own dark navy styling
 
+## Portal Formulário Pre-fill
+- When a portal client opens their formulário for the first time, it's pre-filled with data from the linked company and operation
+- `buildPrefillData(client)` helper in `server/routes/norion-portal.ts` fetches: company address, trade name, CNPJ, and operation diagnostico (valorSolicitado, finalidade, prazo, garantias)
+- For existing formulários with empty fields, a "backfill" step runs on each GET: if client has operationId but form has no address/operation data, empty fields are updated from company/operation
+- QSA matching: if client CPF matches a sócio in company enrichmentData.qsa, the sócio's qualificacao is used as profissao
+- All `CHECKLIST_HOME_EQUITY` hardcoded usages replaced with `getChecklistForOperation(diagnostico)` for operation-linked clients; Home Equity remains as fallback for standalone clients without operation context
+
 ## Notes
 - The Notion integration was not used (user dismissed it). If needed in the future, can be set up via Replit integrations or manual API token.
 - GitHub repo: mavriondev/norion-capital (público). Último sync: commit ec85abe3 (company history tracking, data aggregation, permanent portal access)
