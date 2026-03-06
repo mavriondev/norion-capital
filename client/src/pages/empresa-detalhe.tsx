@@ -675,6 +675,77 @@ function TabOperacoes({ company }: { company: any }) {
   );
 }
 
+function TabHistorico({ companyId }: { companyId: number }) {
+  const { data: timeline = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/norion/companies", companyId, "historico"],
+    queryFn: async () => {
+      const res = await fetch(`/api/norion/companies/${companyId}/historico`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const severityColors: Record<string, string> = {
+    info: "text-blue-400 bg-blue-900/30",
+    warning: "text-amber-400 bg-amber-900/30",
+    success: "text-green-400 bg-green-900/30",
+    error: "text-red-400 bg-red-900/30",
+  };
+
+  const severityIcons: Record<string, any> = {
+    info: Clock,
+    warning: AlertCircle,
+    success: CheckCircle2,
+    error: AlertCircle,
+  };
+
+  return (
+    <div className="space-y-3" data-testid="tab-historico">
+      <div className="flex items-center gap-2">
+        <Clock className="w-4 h-4 text-amber-600" />
+        <span className="text-sm font-semibold">Histórico de Eventos</span>
+        <Badge variant="outline" className="text-xs">{timeline.length}</Badge>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin" /></div>
+      ) : timeline.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">Nenhum evento registrado para esta empresa.</p>
+      ) : (
+        <div className="space-y-2">
+          {timeline.map((event: any) => {
+            const Icon = severityIcons[event.severity] || Clock;
+            const color = severityColors[event.severity] || severityColors.info;
+            return (
+              <div key={event.id} className="border rounded-md p-3" data-testid={`timeline-event-${event.id}`}>
+                <div className="flex items-start gap-3">
+                  <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5", color)}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{event.eventTitle}</p>
+                      <span className="text-xs text-muted-foreground">{formatDate(event.createdAt)}</span>
+                    </div>
+                    {event.eventDescription && <p className="text-xs text-muted-foreground mt-1">{event.eventDescription}</p>}
+                    {event.eventData && Object.keys(event.eventData).length > 0 && (
+                      <div className="text-xs text-muted-foreground mt-2 space-y-1">
+                        {Object.entries(event.eventData).map(([key, value]: [string, any]) => (
+                          <div key={key}><span className="font-medium">{key}:</span> {JSON.stringify(value)}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function EmpresaDetalhePage({ id }: { id: string }) {
   const [, navigate] = useLocation();
   const { data: companiesList = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/crm/companies"] });
@@ -736,6 +807,7 @@ export default function EmpresaDetalhePage({ id }: { id: string }) {
             <TabsTrigger value="sicor" className="rounded-none border-b-2 border-transparent data-[state=active]:border-amber-500 data-[state=active]:bg-transparent px-4 py-2.5 text-xs" data-testid="tab-trigger-sicor">SICOR</TabsTrigger>
             <TabsTrigger value="ibge" className="rounded-none border-b-2 border-transparent data-[state=active]:border-amber-500 data-[state=active]:bg-transparent px-4 py-2.5 text-xs" data-testid="tab-trigger-ibge">IBGE</TabsTrigger>
             <TabsTrigger value="operacoes" className="rounded-none border-b-2 border-transparent data-[state=active]:border-amber-500 data-[state=active]:bg-transparent px-4 py-2.5 text-xs" data-testid="tab-trigger-operacoes">Operações</TabsTrigger>
+            <TabsTrigger value="historico" className="rounded-none border-b-2 border-transparent data-[state=active]:border-amber-500 data-[state=active]:bg-transparent px-4 py-2.5 text-xs" data-testid="tab-trigger-historico">Histórico</TabsTrigger>
           </TabsList>
 
           <div className="p-5">
@@ -745,6 +817,7 @@ export default function EmpresaDetalhePage({ id }: { id: string }) {
             <TabsContent value="sicor" className="m-0"><TabSICOR company={company} sources={dataSources} /></TabsContent>
             <TabsContent value="ibge" className="m-0"><TabIBGE company={company} sources={dataSources} /></TabsContent>
             <TabsContent value="operacoes" className="m-0"><TabOperacoes company={company} /></TabsContent>
+            <TabsContent value="historico" className="m-0"><TabHistorico companyId={company.id} /></TabsContent>
           </div>
         </Tabs>
       </Card>

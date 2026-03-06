@@ -1,6 +1,6 @@
 import type { Express } from "express";
-import { eq, and, desc, ilike, sql, gte, lte } from "drizzle-orm";
-import { companies, norionOperations, norionDocuments, norionFundosParceiros, norionEnviosFundos, orgSettings, norionCafRegistros, norionFormularioCliente, companyDataSources } from "@shared/schema";
+import { eq, and, desc, ilike, sql, gte, lte, or } from "drizzle-orm";
+import { companies, norionOperations, norionDocuments, norionFundosParceiros, norionEnviosFundos, orgSettings, norionCafRegistros, norionFormularioCliente, companyDataSources, companyTimelineEvents } from "@shared/schema";
 import { storage, getOrgId, audit } from "../storage";
 import { consultarFundoCVM, listarFundosEstruturadosANBIMA, isAnbimaConfigured, clearAnbimaTokenCache, type AnbimaCredentials } from "../enrichment/fundos";
 import { enrichCompany, enrichSource, calcularPerfilEnriquecido } from "../enrichment/company-enrichment";
@@ -1987,6 +1987,74 @@ export function registerNorionRoutes(app: Express, db: any) {
       tags.sdrStatus = req.body.status;
       await storage.updateCompany(id, { tags });
       res.json({ success: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Endpoint para obter histórico completo de uma empresa
+  app.get("/api/norion/companies/:id/historico", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const companyId = Number(req.params.id);
+      const company = await storage.getCompany(companyId);
+      if (!company || company.orgId !== orgId) return res.status(404).json({ message: "Empresa não encontrada" });
+      
+      const timeline = await db.select().from(companyTimelineEvents)
+        .where(and(eq(companyTimelineEvents.companyId, companyId), eq(companyTimelineEvents.orgId, orgId)))
+        .orderBy(desc(companyTimelineEvents.createdAt));
+      
+      res.json(timeline);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Endpoint para obter dados agregados de uma fonte específica
+  app.get("/api/norion/companies/:id/dados-agregados/:dataType", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const companyId = Number(req.params.id);
+      const dataType = req.params.dataType;
+      const company = await storage.getCompany(companyId);
+      if (!company || company.orgId !== orgId) return res.status(404).json({ message: "Empresa não encontrada" });
+      
+      const sources = await db.select().from(companyDataSources)
+        .where(and(
+          eq(companyDataSources.companyId, companyId),
+          eq(companyDataSources.orgId, orgId),
+          eq(companyDataSources.dataType, dataType)
+        ))
+        .orderBy(desc(companyDataSources.createdAt));
+      
+      res.json(sources);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Endpoint para autocomplete de CNPJ
+  app.get("/api/norion/companies/search/cnpj", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const q = (req.query.q as string || "").trim();
+      if (q.length < 2) return res.json([]);
+      
+      const results = await db.select().from(companies)
+        .where(and(
+          eq(companies.orgId, orgId),
+          or(
+            ilike(companies.cnpj, `%${q}%`),
+            ilike(companies.legalName, `%${q}%`),
+            ilike(companies.tradeName, `%${q}%`)
+          )
+        ))
+        .limit(10);
+      
+      res.json(results.map(c => ({
+        id: c.id,
+        cnpj: c.cnpj,
+        legalName: c.legalName,
+        tradeName: c.tradeName,
+        norionProfile: c.norionProfile,
+      })));
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

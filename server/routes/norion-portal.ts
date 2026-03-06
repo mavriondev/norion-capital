@@ -1,13 +1,14 @@
 import type { Express } from "express";
 import { eq, and, or, inArray } from "drizzle-orm";
-import { norionClientUsers, norionOperations, norionDocuments, norionFormularioCliente, norionFundosParceiros, companies } from "@shared/schema";
+import { norionClientUsers, norionOperations, norionDocuments, norionFormularioCliente, norionFundosParceiros, companies, companyTimelineEvents } from "@shared/schema";
 import { getOrgId, audit, storage } from "../storage";
+import { db } from "../db";
 import { uploadToDrive } from "../google-drive";
 import { CHECKLIST_HOME_EQUITY, getChecklistForOperation, getDocumentPool } from "./norion";
 import { enrichCompany } from "../enrichment/company-enrichment";
 import crypto from "crypto";
 
-export function registerNorionPortalRoutes(app: Express, db: any) {
+export function registerNorionPortalRoutes(app: Express, database: any) {
 
   app.post("/api/norion-portal/login", async (req, res) => {
     try {
@@ -684,6 +685,63 @@ export function registerNorionPortalRoutes(app: Express, db: any) {
         .set({ status: "enviado", completedAt: new Date(), updatedAt: new Date() })
         .where(eq(norionFormularioCliente.id, existing.id))
         .returning();
+
+      // Vincular dados do formulário à empresa como data source
+      if (existing.operationId) {
+        const [operation] = await db.select().from(norionOperations)
+          .where(eq(norionOperations.id, existing.operationId));
+        
+        if (operation) {
+          const companyId = operation.companyId;
+          const formularioData = {
+            id: existing.id,
+            nomeCompleto: existing.nomeCompleto,
+            cpf: existing.cpf,
+            email: existing.email,
+            telefone: existing.telefone,
+            celular: existing.celular,
+            endereco: {
+              logradouro: existing.logradouro,
+              numero: existing.numero,
+              bairro: existing.bairro,
+              cidade: existing.cidade,
+              uf: existing.uf,
+              cep: existing.cep,
+            },
+            renda: {
+              rendaMensal: existing.rendaMensal,
+              outrasRendas: existing.outrasRendas,
+            },
+            credito: {
+              valorSolicitado: existing.valorSolicitado,
+              finalidade: existing.finalidadeCredito,
+              prazo: existing.prazoDesejado,
+            },
+            garantias: {
+              tipo: existing.tipoGarantia,
+              descricao: existing.descricaoGarantia,
+              valor: existing.valorGarantia,
+            },
+            patrimonios: {
+              imovel: existing.possuiImovel ? { valor: existing.valorImovel } : null,
+              veiculo: existing.possuiVeiculo ? { valor: existing.valorVeiculo } : null,
+              outros: existing.outrosPatrimonios,
+            },
+          };
+          
+          // Registrar como timeline event
+          await db.insert(companyTimelineEvents).values({
+            companyId,
+            orgId: client.orgId,
+            eventType: "formulario_enviado",
+            eventTitle: "Formulário do Cliente Enviado",
+            eventDescription: `Cliente ${existing.nomeCompleto} enviou formulário de avaliação`,
+            eventData: { formularioId: existing.id, status: "enviado" },
+            severity: "success",
+            createdBy: client.id,
+          });
+        }
+      }
 
       res.json(updated);
     } catch (err: any) {

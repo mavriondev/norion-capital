@@ -43,6 +43,8 @@ export default function PortalClientesAdminPage() {
   const [search, setSearch] = useState("");
   const [lookingUpCnpj, setLookingUpCnpj] = useState(false);
   const [cnpjSource, setCnpjSource] = useState<string | null>(null);
+  const [autocompleteOpen, setAutocompleteOpen] = useState(false);
+  const [autocompleteResults, setAutocompleteResults] = useState<any[]>([]);
 
   const { data: clientes = [], isLoading: loadingClientes } = useQuery({
     queryKey: ["/api/norion/clientes-portal"],
@@ -76,6 +78,32 @@ export default function PortalClientesAdminPage() {
       toast({ title: "Erro", description: err.message, variant: "destructive" });
     },
   });
+
+  const searchCompanies = async (q: string) => {
+    if (q.length < 2) {
+      setAutocompleteResults([]);
+      setAutocompleteOpen(false);
+      return;
+    }
+    try {
+      const res = await apiRequest("GET", `/api/norion/companies/search/cnpj?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setAutocompleteResults(data);
+      setAutocompleteOpen(data.length > 0);
+    } catch {
+      setAutocompleteResults([]);
+      setAutocompleteOpen(false);
+    }
+  };
+
+  const selectCompany = (company: any) => {
+    const digits = (company.cnpj || "").replace(/\D/g, "");
+    setTaxId(formatTaxId(digits));
+    setName(company.tradeName || company.legalName || "");
+    setCnpjSource("Base Norion");
+    setAutocompleteOpen(false);
+    setAutocompleteResults([]);
+  };
 
   const lookupCnpj = async (digits: string) => {
     if (digits.length !== 14) return;
@@ -206,14 +234,31 @@ export default function PortalClientesAdminPage() {
                     const formatted = formatTaxId(e.target.value);
                     setTaxId(formatted);
                     const digits = e.target.value.replace(/\D/g, "");
+                    searchCompanies(formatted);
                     if (digits.length === 14) lookupCnpj(digits);
                     if (digits.length < 14) setCnpjSource(null);
                   }}
+                  onFocus={() => taxId.length >= 2 && setAutocompleteOpen(autocompleteResults.length > 0)}
                   maxLength={18}
                   data-testid="input-gerar-taxid"
                 />
                 {lookingUpCnpj && (
                   <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-amber-500" />
+                )}
+                {autocompleteOpen && autocompleteResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
+                    {autocompleteResults.map((company: any) => (
+                      <button
+                        key={company.id}
+                        onClick={() => selectCompany(company)}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-700 transition-colors text-sm border-b border-slate-700 last:border-0"
+                        data-testid={`autocomplete-company-${company.id}`}
+                      >
+                        <div className="font-medium text-slate-100">{company.tradeName || company.legalName}</div>
+                        <div className="text-xs text-slate-400">{company.cnpj}</div>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
               {cnpjSource && (
