@@ -54,7 +54,9 @@ export default function NorionConsultaFundosPage() {
     try {
       let url: string;
       if (isEconomiaReal(selectedType)) {
-        url = `/api/norion/fundos-economia-real?tipo=${selectedType}`;
+        const params = new URLSearchParams({ tipo: selectedType });
+        if (searchFilter.trim()) params.set("search", searchFilter.trim());
+        url = `/api/norion/fundos-economia-real?${params.toString()}`;
       } else {
         url = `/api/norion/fundos-estruturados`;
       }

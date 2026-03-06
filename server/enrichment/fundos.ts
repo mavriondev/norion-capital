@@ -31,16 +31,16 @@ async function fetchCvmCadastro(): Promise<any[]> {
     }
     const buffer = await response.arrayBuffer();
     const text = new TextDecoder("latin1").decode(buffer);
-    const lines = text.split("\n");
+    const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
     if (lines.length < 2) return [];
-    const headers = lines[0].split(";").map((h: string) => h.trim());
+    const headers = lines[0].split(";").map((h: string) => h.trim().replace(/\r/g, ""));
     const rows: any[] = [];
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split(";");
       if (cols.length < headers.length) continue;
       const row: any = {};
       for (let j = 0; j < headers.length; j++) {
-        row[headers[j]] = (cols[j] || "").trim();
+        row[headers[j]] = (cols[j] || "").trim().replace(/\r/g, "");
       }
       rows.push(row);
     }
@@ -53,36 +53,48 @@ async function fetchCvmCadastro(): Promise<any[]> {
   }
 }
 
-const ECONOMIA_REAL_TYPES: Record<string, { tpFundos: string[]; keywords: string[] }> = {
-  venture_capital: { tpFundos: ["FIP"], keywords: ["VENTURE", "CAPITAL SEMENTE", "SEED"] },
-  private_capital: { tpFundos: ["FIP"], keywords: [] },
-  imobiliarios: { tpFundos: ["FII"], keywords: ["IMOBILI"] },
-  agricolas: { tpFundos: ["FIP", "FII", "FI"], keywords: ["AGRO", "FIAGRO", "AGRICOL"] },
-};
+const VC_KEYWORDS = ["VENTURE", "CAPITAL SEMENTE", "SEED", "EMERGENT"];
+const AGRO_KEYWORDS = ["AGRO", "FIAGRO", "AGRICOL", "AGRONEG"];
+
+function matchesAny(text: string, keywords: string[]): boolean {
+  const upper = text.toUpperCase();
+  return keywords.some(kw => upper.includes(kw));
+}
+
+function classifyFundo(r: any): string[] {
+  const tp = r.TP_FUNDO || "";
+  const nome = (r.DENOM_SOCIAL || "").toUpperCase();
+  const classe = (r.CLASSE || "").toUpperCase();
+  const classeAnb = (r.CLASSE_ANBIMA || "").toUpperCase();
+  const combined = `${nome} ${classe} ${classeAnb}`;
+  const tags: string[] = [];
+
+  if (matchesAny(combined, AGRO_KEYWORDS)) {
+    tags.push("agricolas");
+  }
+
+  if (tp === "FII") {
+    tags.push("imobiliarios");
+  }
+
+  if (tp === "FIP") {
+    if (matchesAny(combined, VC_KEYWORDS)) {
+      tags.push("venture_capital");
+    } else {
+      tags.push("private_capital");
+    }
+  }
+
+  return tags;
+}
 
 export async function listarFundosEconomiaReal(tipo?: string, search?: string): Promise<FundoInfo[]> {
   const allRows = await fetchCvmCadastro();
   const activeRows = allRows.filter((r: any) => (r.SIT || "").includes("FUNCIONAMENTO"));
 
   let filtered: any[];
-  if (tipo && ECONOMIA_REAL_TYPES[tipo]) {
-    const config = ECONOMIA_REAL_TYPES[tipo];
-    filtered = activeRows.filter((r: any) => {
-      const tp = r.TP_FUNDO || "";
-      const nome = (r.DENOM_SOCIAL || "").toUpperCase();
-      const classe = (r.CLASSE || "").toUpperCase();
-      const classeAnb = (r.CLASSE_ANBIMA || "").toUpperCase();
-      if (!config.tpFundos.includes(tp)) {
-        if (config.keywords.length > 0) {
-          return config.keywords.some((kw: string) => nome.includes(kw) || classe.includes(kw) || classeAnb.includes(kw));
-        }
-        return false;
-      }
-      if (config.keywords.length > 0) {
-        return config.keywords.some((kw: string) => nome.includes(kw) || classe.includes(kw) || classeAnb.includes(kw) || tp === config.tpFundos[0]);
-      }
-      return true;
-    });
+  if (tipo) {
+    filtered = activeRows.filter((r: any) => classifyFundo(r).includes(tipo));
   } else {
     filtered = activeRows.filter((r: any) => {
       const tp = r.TP_FUNDO || "";
