@@ -138,7 +138,7 @@ class DatabaseStorage {
   }
 
   async createNorionFundoParceiro(data: InsertNorionFundoParceiro) {
-    const [created] = await db.insert(norionFundosParceiros).values(data).returning();
+    const [created] = await db.insert(norionFundosParceiros).values(data as any).returning();
     return created;
   }
 
@@ -168,7 +168,7 @@ class DatabaseStorage {
   }
 
   async createNorionEnvioFundo(data: InsertNorionEnvioFundo) {
-    const [created] = await db.insert(norionEnviosFundos).values(data).returning();
+    const [created] = await db.insert(norionEnviosFundos).values(data as any).returning();
     return created;
   }
 

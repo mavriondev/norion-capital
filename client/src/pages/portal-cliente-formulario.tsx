@@ -556,7 +556,7 @@ export default function PortalClienteFormulario() {
   };
 
   const stepsWithRevision = hasFieldRestriction
-    ? [...new Set(camposRevisao.map(f => FIELD_STEP_MAP[f]).filter(Boolean))]
+    ? Array.from(new Set(camposRevisao.map((f: string) => FIELD_STEP_MAP[f]).filter(Boolean)))
     : [];
 
   if (!portalClientId || !portalToken) return null;

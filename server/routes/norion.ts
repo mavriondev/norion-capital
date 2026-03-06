@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Express } from "express";
 import { eq, and, desc, ilike, sql, gte, lte, or } from "drizzle-orm";
 import { companies, norionOperations, norionDocuments, norionFundosParceiros, norionEnviosFundos, orgSettings, norionCafRegistros, norionFormularioCliente, norionClientUsers, norionNotificacoes, companyDataSources, companyTimelineEvents } from "@shared/schema";

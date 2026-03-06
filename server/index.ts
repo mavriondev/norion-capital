@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import path from "path";
 
 const app = express();
 const httpServer = createServer(app);
@@ -23,7 +24,6 @@ app.use(
 
 app.use(express.urlencoded({ extended: false, limit: '30mb' }));
 
-import path from "path";
 app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 
 export function log(message: string, source = "express") {

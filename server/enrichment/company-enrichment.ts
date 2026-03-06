@@ -389,6 +389,7 @@ export async function enrichSource(companyId: number, sourceType: string, db: an
     if (qsa.length === 0) {
       if (cnpj) {
         const brasilData = await fetchBrasilAPI(cnpj);
+        if (!brasilData) return { error: "Falha ao buscar dados da Receita Federal" };
         if (brasilData?.qsa?.length > 0) {
           enrichment.qsa = brasilData.qsa.map((s: any) => ({ ...s, temDAP: false }));
           enrichment.cnpj = {
@@ -586,7 +587,7 @@ export async function enrichCompany(companyId: number, db: any): Promise<{
     return { ...s, temDAP: dapInfo?.temDAP || false };
   });
 
-  const enrichmentData = {
+  const enrichmentData: any = {
     cnpj: brasilData ? {
       situacaoCadastral: brasilData.situacaoCadastral,
       capitalSocial: brasilData.capitalSocial,

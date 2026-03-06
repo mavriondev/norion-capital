@@ -848,16 +848,18 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
           };
           
           // Registrar como timeline event
-          await db.insert(companyTimelineEvents).values({
-            companyId,
-            orgId: client.orgId,
-            eventType: "formulario_enviado",
-            eventTitle: "Formulário do Cliente Enviado",
-            eventDescription: `Cliente ${existing.nomeCompleto} enviou formulário de avaliação`,
-            eventData: { formularioId: existing.id, status: "enviado" },
-            severity: "success",
-            createdBy: client.id,
-          });
+          if (companyId) {
+            await db.insert(companyTimelineEvents).values({
+              companyId,
+              orgId: client.orgId,
+              eventType: "formulario_enviado",
+              eventTitle: "Formulário do Cliente Enviado",
+              eventDescription: `Cliente ${existing.nomeCompleto} enviou formulário de avaliação`,
+              eventData: { formularioId: existing.id, status: "enviado" },
+              severity: "success",
+              createdBy: client.id,
+            });
+          }
 
           // Notificar todos os admins/gestores da org
           await storage.criarNotificacao({
@@ -1091,10 +1093,14 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
         observacoesInternas: `Operação criada a partir do formulário #${formulario.id} (Portal Cliente)`,
       }).returning();
 
-      await audit(
-        orgId, user?.id ?? null, "created", "norion_operation", op.id,
-        { stage: { from: null, to: op.stage }, origem: "portal_cliente" }
-      );
+      await audit({
+        orgId,
+        userId: user?.id ?? null,
+        entity: "norion_operation",
+        entityId: op.id,
+        action: "created",
+        changes: { stage: { from: null, to: op.stage }, origem: "portal_cliente" },
+      });
 
       if (formulario.clientUserId) {
         const clientDocs = await db.select().from(norionDocuments)
