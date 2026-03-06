@@ -1109,22 +1109,35 @@ export function registerNorionRoutes(app: Express, db: any) {
       const orgId = getOrgId();
       const user = req.user as any;
       const operationId = Number(req.params.id);
-      const { fundoParceiroId, observacoes } = req.body;
+      const { fundoParceiroId, observacoes, motivoEscolha, matchScore, matchReasons, confirmarEnvio } = req.body;
       if (!fundoParceiroId) return res.status(400).json({ message: "fundoParceiroId é obrigatório" });
       const [op] = await db.select().from(norionOperations).where(and(eq(norionOperations.id, operationId), eq(norionOperations.orgId, orgId)));
       if (!op) return res.status(404).json({ message: "Operação não encontrada" });
       const fundo = await storage.getNorionFundoParceiro(fundoParceiroId, orgId);
       if (!fundo) return res.status(404).json({ message: "Fundo parceiro não encontrado" });
+      // Verificar se já existe envio para este fundo nesta operação
+      const [existente] = await db.select().from(norionEnviosFundos)
+        .where(and(eq(norionEnviosFundos.operationId, operationId), eq(norionEnviosFundos.fundoParceiroId, fundoParceiroId)));
+      if (existente) return res.status(409).json({ message: "Já existe um envio para este fundo nesta operação" });
+      // Status: pronto_para_envio (selecionado, aguardando envio) ou enviado (confirmado)
+      const statusInicial = confirmarEnvio ? "enviado" : "pronto_para_envio";
       const envio = await storage.createNorionEnvioFundo({
-        orgId, operationId, fundoParceiroId, status: "enviado", observacoes: observacoes || null,
-      });
-      if (["identificado", "diagnostico"].includes(op.stage)) {
+        orgId, operationId, fundoParceiroId,
+        status: statusInicial,
+        observacoes: observacoes || null,
+        motivoEscolha: motivoEscolha || null,
+        matchScore: matchScore || null,
+        matchReasons: matchReasons || null,
+        dataEnvio: confirmarEnvio ? new Date() : null,
+      } as any);
+      if (confirmarEnvio && ["identificado", "diagnostico"].includes(op.stage)) {
         await db.update(norionOperations).set({ stage: "enviado_fundos", updatedAt: new Date() })
           .where(eq(norionOperations.id, operationId));
       }
       await audit({ orgId, userId: user?.id, userName: user?.username,
-        entity: "norion_envio_fundo", entityId: envio.id, entityTitle: `Envio para ${fundo.nome}`,
-        action: "created", changes: { operationId, fundoParceiroId } });
+        entity: "norion_envio_fundo", entityId: envio.id,
+        entityTitle: `${confirmarEnvio ? 'Enviado' : 'Selecionado'} para ${fundo.nome}`,
+        action: "created", changes: { operationId, fundoParceiroId, status: statusInicial } });
       res.json(envio);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -1134,10 +1147,12 @@ export function registerNorionRoutes(app: Express, db: any) {
       const orgId = getOrgId();
       const user = req.user as any;
       const envioId = Number(req.params.id);
-      const { status, valorAprovado, taxaJuros, prazoAprovado, motivoRecusa, observacoes } = req.body;
+      const { status, valorAprovado, taxaJuros, prazoAprovado, motivoRecusa, observacoes, motivoEscolha } = req.body;
       const updateData: Record<string, any> = {};
       if (status) {
         updateData.status = status;
+        // Registra dataEnvio quando confirma o envio
+        if (status === "enviado") updateData.dataEnvio = new Date();
         if (["aprovado", "recusado"].includes(status)) updateData.dataResposta = new Date();
       }
       if (valorAprovado !== undefined) updateData.valorAprovado = valorAprovado;
@@ -1145,6 +1160,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       if (prazoAprovado !== undefined) updateData.prazoAprovado = prazoAprovado;
       if (motivoRecusa !== undefined) updateData.motivoRecusa = motivoRecusa;
       if (observacoes !== undefined) updateData.observacoes = observacoes;
+      if (motivoEscolha !== undefined) updateData.motivoEscolha = motivoEscolha;
       const updated = await storage.updateNorionEnvioFundo(envioId, orgId, updateData);
       if (!updated) return res.status(404).json({ message: "Envio não encontrado" });
       if (status === "aprovado" && updated.operationId && valorAprovado) {

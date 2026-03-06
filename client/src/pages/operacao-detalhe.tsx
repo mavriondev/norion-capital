@@ -365,6 +365,7 @@ function DocumentChecklist({ operationId, finalidade }: { operationId: number; f
 
 function EnviosFundosSection({ operationId }: { operationId: number }) {
   const { toast } = useToast();
+  const [motivoEscolha, setMotivoEscolha] = useState<Record<number, string>>({});
 
   const { data: envios = [], isLoading: enviosLoading } = useQuery<any[]>({
     queryKey: ["/api/norion/operations", operationId, "envios"],
@@ -386,15 +387,35 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
     enabled: !!operationId,
   });
 
-  const enviarMutation = useMutation({
-    mutationFn: async (fundoParceiroId: number) => {
-      const res = await apiRequest("POST", `/api/norion/operations/${operationId}/envios`, { fundoParceiroId });
+  // Etapa 1: Selecionar fundo (status: pronto_para_envio)
+  const selecionarMutation = useMutation({
+    mutationFn: async ({ fundoParceiroId, matchScore, matchReasons }: { fundoParceiroId: number; matchScore?: number; matchReasons?: string[] }) => {
+      const res = await apiRequest("POST", `/api/norion/operations/${operationId}/envios`, {
+        fundoParceiroId, matchScore, matchReasons, confirmarEnvio: false,
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/norion/operations", operationId, "envios"] });
+      toast({ title: "Fundo selecionado", description: "Confirme o envio quando estiver pronto." });
+    },
+    onError: (err: any) => toast({ title: "Erro", description: err.message, variant: "destructive" }),
+  });
+
+  // Etapa 2: Confirmar envio (pronto_para_envio → enviado)
+  const confirmarEnvioMutation = useMutation({
+    mutationFn: async ({ envioId, motivo }: { envioId: number; motivo?: string }) => {
+      const res = await apiRequest("PATCH", `/api/norion/envios/${envioId}`, {
+        status: "enviado", motivoEscolha: motivo || undefined,
+      });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/norion/operations", operationId, "envios"] });
       queryClient.invalidateQueries({ queryKey: ["/api/norion/operations"] });
-      toast({ title: "Enviado para o fundo" });
+      queryClient.invalidateQueries({ queryKey: ["/api/norion/dashboard"] });
+      toast({ title: "Enviado!", description: "Operação enviada para o fundo com sucesso." });
     },
     onError: (err: any) => toast({ title: "Erro", description: err.message, variant: "destructive" }),
   });
@@ -415,83 +436,126 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
   const enviadosFundoIds = envios.map((e: any) => e.fundoParceiroId);
   const sugestoes = matching.filter((m: any) => !enviadosFundoIds.includes(m.fundo.id));
 
+  // Separar por status
+  const enviosProntos = envios.filter((e: any) => e.status === "pronto_para_envio");
+  const enviosAtivos = envios.filter((e: any) => e.status !== "pronto_para_envio");
+
+  const statusLabel = (s: string) => ({ pronto_para_envio: "Pronto para Enviar", enviado: "Enviado", em_analise: "Em Análise", aprovado: "Aprovado", recusado: "Recusado" }[s] || s);
+  const statusColor = (s: string) => ({ pronto_para_envio: "border-yellow-400 text-yellow-400", enviado: "border-blue-400 text-blue-400", em_analise: "border-amber-400 text-amber-400", aprovado: "border-green-400 text-green-400", recusado: "border-red-400 text-red-400" }[s] || "border-slate-400 text-slate-400");
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Handshake className="w-4 h-4 text-muted-foreground" />
         <span className="text-sm font-medium">Envio para Fundos</span>
+        {enviosProntos.length > 0 && (
+          <Badge className="text-[10px] bg-yellow-900/30 text-yellow-400 border border-yellow-700">
+            {enviosProntos.length} aguardando envio
+          </Badge>
+        )}
       </div>
 
-      {envios.length > 0 && (
+      {/* Fundos prontos para envio - destaque especial */}
+      {enviosProntos.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground font-medium">Envios Ativos</p>
-          {envios.map((envio: any) => (
-            <div key={envio.id} className="border rounded-lg p-2.5 space-y-2" data-testid={`n-envio-${envio.id}`}>
+          <p className="text-xs font-medium text-yellow-400">Aguardando Confirmação de Envio</p>
+          {enviosProntos.map((envio: any) => (
+            <div key={envio.id} className="border border-yellow-700/50 rounded-lg p-3 space-y-2 bg-yellow-900/10">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">{envio.fundoParceiro?.nome || "Fundo"}</span>
-                <Badge variant="outline" className={cn("text-xs",
-                  envio.status === "aprovado" ? "border-green-400 text-green-400" :
-                  envio.status === "recusado" ? "border-red-400 text-red-400" :
-                  envio.status === "em_analise" ? "border-amber-400 text-amber-400" :
-                  "border-blue-400 text-blue-400"
-                )}>
-                  {envio.status === "enviado" ? "Enviado" : envio.status === "em_analise" ? "Em Análise" : envio.status === "aprovado" ? "Aprovado" : envio.status === "recusado" ? "Recusado" : envio.status}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{envio.fundoParceiro?.nome || "Fundo"}</span>
+                  {envio.matchScore && (
+                    <Badge variant="outline" className="text-[10px] border-green-400 text-green-400">
+                      <Star className="w-2.5 h-2.5 mr-0.5" />{envio.matchScore}% match
+                    </Badge>
+                  )}
+                </div>
+                <Badge variant="outline" className={cn("text-xs", statusColor(envio.status))}>
+                  {statusLabel(envio.status)}
                 </Badge>
               </div>
-              {envio.status !== "aprovado" && envio.status !== "recusado" && (
-                <div className="flex gap-1.5">
-                  <Select
-                    value=""
-                    onValueChange={(val) => {
-                      if (val === "em_analise") updateEnvioMutation.mutate({ envioId: envio.id, data: { status: "em_analise" } });
-                      else if (val === "aprovado") updateEnvioMutation.mutate({ envioId: envio.id, data: { status: "aprovado" } });
-                      else if (val === "recusado") updateEnvioMutation.mutate({ envioId: envio.id, data: { status: "recusado" } });
-                    }}
-                  >
-                    <SelectTrigger className="h-7 text-xs w-auto">
-                      <SelectValue placeholder="Atualizar status..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="em_analise">Em Análise</SelectItem>
-                      <SelectItem value="aprovado">Aprovado</SelectItem>
-                      <SelectItem value="recusado">Recusado</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {envio.matchReasons?.length > 0 && (
+                <p className="text-[10px] text-muted-foreground">{envio.matchReasons.join(" · ")}</p>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  className="h-7 text-xs flex-1"
+                  placeholder="Motivo da escolha (opcional)..."
+                  value={motivoEscolha[envio.id] ?? (envio.motivoEscolha || "")}
+                  onChange={(e) => setMotivoEscolha(prev => ({ ...prev, [envio.id]: e.target.value }))}
+                />
+                <Button
+                  size="sm" className="h-7 text-xs bg-blue-600 hover:bg-blue-700 shrink-0"
+                  onClick={() => confirmarEnvioMutation.mutate({ envioId: envio.id, motivo: motivoEscolha[envio.id] })}
+                  disabled={confirmarEnvioMutation.isPending}
+                >
+                  <Send className="w-3 h-3 mr-1" /> Confirmar Envio
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Envios já enviados/em andamento */}
+      {enviosAtivos.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground font-medium">Envios em Andamento</p>
+          {enviosAtivos.map((envio: any) => (
+            <div key={envio.id} className="border rounded-lg p-2.5 space-y-2" data-testid={`n-envio-${envio.id}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-medium">{envio.fundoParceiro?.nome || "Fundo"}</span>
+                  {envio.matchScore && (
+                    <Badge variant="outline" className="ml-2 text-[10px] border-slate-500 text-slate-400">
+                      {envio.matchScore}% match
+                    </Badge>
+                  )}
                 </div>
+                <Badge variant="outline" className={cn("text-xs", statusColor(envio.status))}>
+                  {statusLabel(envio.status)}
+                </Badge>
+              </div>
+              {envio.dataEnvio && (
+                <p className="text-[10px] text-muted-foreground">Enviado em: {new Date(envio.dataEnvio).toLocaleDateString('pt-BR')}</p>
+              )}
+              {envio.motivoEscolha && (
+                <p className="text-[10px] text-muted-foreground italic">"{envio.motivoEscolha}"</p>
+              )}
+              {envio.status !== "aprovado" && envio.status !== "recusado" && (
+                <Select value="" onValueChange={(val) => updateEnvioMutation.mutate({ envioId: envio.id, data: { status: val } })}>
+                  <SelectTrigger className="h-7 text-xs w-auto">
+                    <SelectValue placeholder="Atualizar status..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="em_analise">Em Análise</SelectItem>
+                    <SelectItem value="aprovado">Aprovado</SelectItem>
+                    <SelectItem value="recusado">Recusado</SelectItem>
+                  </SelectContent>
+                </Select>
               )}
               {envio.status === "aprovado" && (
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label className="text-[10px] text-muted-foreground">Valor Aprovado</Label>
-                    <Input
-                      type="number" className="h-7 text-xs" placeholder="R$ 0"
+                    <Input type="number" className="h-7 text-xs" placeholder="R$ 0"
                       defaultValue={envio.valorAprovado || ""}
-                      onBlur={(e) => {
-                        const v = parseFloat(e.target.value);
-                        if (!isNaN(v)) updateEnvioMutation.mutate({ envioId: envio.id, data: { valorAprovado: v, status: "aprovado" } });
-                      }}
+                      onBlur={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) updateEnvioMutation.mutate({ envioId: envio.id, data: { valorAprovado: v, status: "aprovado" } }); }}
                     />
                   </div>
                   <div>
                     <Label className="text-[10px] text-muted-foreground">Taxa Juros %</Label>
-                    <Input
-                      type="number" className="h-7 text-xs" placeholder="0"
+                    <Input type="number" className="h-7 text-xs" placeholder="0"
                       defaultValue={envio.taxaJuros || ""}
-                      onBlur={(e) => {
-                        const v = parseFloat(e.target.value);
-                        if (!isNaN(v)) updateEnvioMutation.mutate({ envioId: envio.id, data: { taxaJuros: v } });
-                      }}
+                      onBlur={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) updateEnvioMutation.mutate({ envioId: envio.id, data: { taxaJuros: v } }); }}
                     />
                   </div>
                 </div>
               )}
               {envio.status === "recusado" && (
-                <Input
-                  className="h-7 text-xs" placeholder="Motivo da recusa..."
+                <Input className="h-7 text-xs" placeholder="Motivo da recusa..."
                   defaultValue={envio.motivoRecusa || ""}
-                  onBlur={(e) => {
-                    if (e.target.value) updateEnvioMutation.mutate({ envioId: envio.id, data: { motivoRecusa: e.target.value } });
-                  }}
+                  onBlur={(e) => { if (e.target.value) updateEnvioMutation.mutate({ envioId: envio.id, data: { motivoRecusa: e.target.value } }); }}
                 />
               )}
             </div>
@@ -499,9 +563,10 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
         </div>
       )}
 
+      {/* Fundos sugeridos pelo matching */}
       {sugestoes.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground font-medium">Fundos Sugeridos</p>
+          <p className="text-xs text-muted-foreground font-medium">Fundos Recomendados</p>
           {sugestoes.slice(0, 5).map((m: any) => (
             <div key={m.fundo.id} className="flex items-center justify-between border rounded-lg p-2" data-testid={`n-matching-${m.fundo.id}`}>
               <div className="flex-1 min-w-0">
@@ -512,19 +577,19 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
                     m.score >= 50 ? "border-amber-400 text-amber-400 bg-amber-900/30" :
                     "border-slate-600 text-slate-400"
                   )}>
-                    <Star className="w-2.5 h-2.5 mr-0.5" />
-                    {m.score}%
+                    <Star className="w-2.5 h-2.5 mr-0.5" />{m.score}%
                   </Badge>
+                  {m.score >= 80 && <Badge className="text-[10px] bg-green-900/30 text-green-400 border border-green-700">Ideal</Badge>}
                 </div>
                 <p className="text-[10px] text-muted-foreground truncate">{m.reasons?.join(" · ")}</p>
               </div>
               <Button
                 variant="outline" size="sm" className="h-7 text-xs shrink-0 ml-2"
-                onClick={() => enviarMutation.mutate(m.fundo.id)}
-                disabled={enviarMutation.isPending}
+                onClick={() => selecionarMutation.mutate({ fundoParceiroId: m.fundo.id, matchScore: m.score, matchReasons: m.reasons })}
+                disabled={selecionarMutation.isPending}
                 data-testid={`button-enviar-fundo-${m.fundo.id}`}
               >
-                <Send className="w-3 h-3 mr-1" /> Enviar
+                <Plus className="w-3 h-3 mr-1" /> Selecionar
               </Button>
             </div>
           ))}
