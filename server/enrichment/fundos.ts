@@ -10,7 +10,108 @@ export interface FundoInfo {
   dataConstituicao?: string;
   dataEncerramento?: string | null;
   codigoFundo?: string;
+  classeAnbima?: string;
   source: "cvm" | "anbima";
+}
+
+let cvmCache: { data: any[]; fetchedAt: number } | null = null;
+const CVM_CACHE_TTL = 60 * 60 * 1000;
+
+async function fetchCvmCadastro(): Promise<any[]> {
+  if (cvmCache && Date.now() - cvmCache.fetchedAt < CVM_CACHE_TTL) {
+    return cvmCache.data;
+  }
+  try {
+    const response = await fetch("https://dados.cvm.gov.br/dados/FI/CAD/DADOS/cad_fi.csv", {
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      console.error(`CVM CSV fetch error: ${response.status}`);
+      return cvmCache?.data || [];
+    }
+    const buffer = await response.arrayBuffer();
+    const text = new TextDecoder("latin1").decode(buffer);
+    const lines = text.split("\n");
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(";").map((h: string) => h.trim());
+    const rows: any[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(";");
+      if (cols.length < headers.length) continue;
+      const row: any = {};
+      for (let j = 0; j < headers.length; j++) {
+        row[headers[j]] = (cols[j] || "").trim();
+      }
+      rows.push(row);
+    }
+    cvmCache = { data: rows, fetchedAt: Date.now() };
+    console.log(`[CVM] Cadastro carregado: ${rows.length} fundos`);
+    return rows;
+  } catch (err) {
+    console.error("CVM CSV fetch failed:", err);
+    return cvmCache?.data || [];
+  }
+}
+
+const ECONOMIA_REAL_TYPES: Record<string, { tpFundos: string[]; keywords: string[] }> = {
+  venture_capital: { tpFundos: ["FIP"], keywords: ["VENTURE", "CAPITAL SEMENTE", "SEED"] },
+  private_capital: { tpFundos: ["FIP"], keywords: [] },
+  imobiliarios: { tpFundos: ["FII"], keywords: ["IMOBILI"] },
+  agricolas: { tpFundos: ["FIP", "FII", "FI"], keywords: ["AGRO", "FIAGRO", "AGRICOL"] },
+};
+
+export async function listarFundosEconomiaReal(tipo?: string, search?: string): Promise<FundoInfo[]> {
+  const allRows = await fetchCvmCadastro();
+  const activeRows = allRows.filter((r: any) => (r.SIT || "").includes("FUNCIONAMENTO"));
+
+  let filtered: any[];
+  if (tipo && ECONOMIA_REAL_TYPES[tipo]) {
+    const config = ECONOMIA_REAL_TYPES[tipo];
+    filtered = activeRows.filter((r: any) => {
+      const tp = r.TP_FUNDO || "";
+      const nome = (r.DENOM_SOCIAL || "").toUpperCase();
+      const classe = (r.CLASSE || "").toUpperCase();
+      const classeAnb = (r.CLASSE_ANBIMA || "").toUpperCase();
+      if (!config.tpFundos.includes(tp)) {
+        if (config.keywords.length > 0) {
+          return config.keywords.some((kw: string) => nome.includes(kw) || classe.includes(kw) || classeAnb.includes(kw));
+        }
+        return false;
+      }
+      if (config.keywords.length > 0) {
+        return config.keywords.some((kw: string) => nome.includes(kw) || classe.includes(kw) || classeAnb.includes(kw) || tp === config.tpFundos[0]);
+      }
+      return true;
+    });
+  } else {
+    filtered = activeRows.filter((r: any) => {
+      const tp = r.TP_FUNDO || "";
+      return ["FIP", "FII"].includes(tp);
+    });
+  }
+
+  if (search && search.trim()) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter((r: any) => {
+      const nome = (r.DENOM_SOCIAL || "").toLowerCase();
+      const cnpj = (r.CNPJ_FUNDO || "").replace(/\D/g, "");
+      return nome.includes(q) || cnpj.includes(q);
+    });
+  }
+
+  return filtered.map((r: any) => ({
+    cnpj: (r.CNPJ_FUNDO || "").replace(/\D/g, ""),
+    nome: r.DENOM_SOCIAL || "",
+    tipo: r.TP_FUNDO || "",
+    categoria: r.CLASSE || r.TP_FUNDO || "",
+    patrimonio: r.VL_PATRIM_LIQ ? parseFloat(r.VL_PATRIM_LIQ.replace(",", ".")) : undefined,
+    situacao: r.SIT || "",
+    administrador: r.ADMIN || "",
+    gestor: r.GESTOR || "",
+    dataConstituicao: r.DT_CONST || "",
+    classeAnbima: r.CLASSE_ANBIMA || "",
+    source: "cvm" as const,
+  }));
 }
 
 export async function consultarFundoCVM(cnpj: string): Promise<FundoInfo | null> {

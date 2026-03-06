@@ -3,15 +3,26 @@ import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import {
   Search, Loader2, AlertTriangle, Plus,
-  Landmark, FileText, Handshake,
+  Landmark, FileText, Handshake, Building2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from "@/components/ui/select";
 import { CreateFundoDialog } from "@/components/norion-create-fundo-dialog";
+
+const ECONOMIA_REAL_TYPES = ["venture_capital", "private_capital", "imobiliarios", "agricolas"];
+
+function isEconomiaReal(tipo: string) {
+  return ECONOMIA_REAL_TYPES.includes(tipo);
+}
+
+function formatBRL(value: number | null | undefined) {
+  if (value == null || isNaN(value)) return "—";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0 }).format(value);
+}
 
 export default function NorionConsultaFundosPage() {
   const { toast } = useToast();
@@ -19,10 +30,10 @@ export default function NorionConsultaFundosPage() {
   const [cvmResult, setCvmResult] = useState<any>(null);
   const [cvmLoading, setCvmLoading] = useState(false);
   const [cvmError, setCvmError] = useState<string | null>(null);
-  const [anbimaType, setAnbimaType] = useState("");
-  const [anbimaSearch, setAnbimaSearch] = useState("");
-  const [anbimaResult, setAnbimaResult] = useState<any>(null);
-  const [anbimaLoading, setAnbimaLoading] = useState(false);
+  const [selectedType, setSelectedType] = useState("");
+  const [searchFilter, setSearchFilter] = useState("");
+  const [fundosResult, setFundosResult] = useState<any>(null);
+  const [fundosLoading, setFundosLoading] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createInitialData, setCreateInitialData] = useState<{ nome?: string; cnpj?: string; categoria?: string } | undefined>(undefined);
 
@@ -33,31 +44,38 @@ export default function NorionConsultaFundosPage() {
     if (clean.length < 14) { setCvmError("CNPJ inválido"); return; }
     setCvmLoading(true); setCvmError(null); setCvmResult(null);
     try {
-      const res = await fetch(`/api/norion/fundo/${clean}`);
+      const res = await fetch(`/api/norion/fundo/${clean}`, { credentials: "include" });
       if (!res.ok) { setCvmError((await res.json()).message || "Não encontrado"); } else { setCvmResult(await res.json()); }
     } catch { setCvmError("Erro de conexão"); } finally { setCvmLoading(false); }
   };
 
-  const buscarANBIMA = async () => {
-    setAnbimaLoading(true); setAnbimaResult(null);
+  const buscarFundos = async () => {
+    setFundosLoading(true); setFundosResult(null);
     try {
-      const res = await fetch(`/api/norion/fundos-estruturados`);
-      if (!res.ok) { toast({ title: "Erro", variant: "destructive" }); return; }
-      setAnbimaResult(await res.json());
-    } catch { toast({ title: "Erro ao buscar", variant: "destructive" }); } finally { setAnbimaLoading(false); }
+      let url: string;
+      if (isEconomiaReal(selectedType)) {
+        url = `/api/norion/fundos-economia-real?tipo=${selectedType}`;
+      } else {
+        url = `/api/norion/fundos-estruturados`;
+      }
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) { toast({ title: "Erro ao buscar fundos", variant: "destructive" }); return; }
+      const data = await res.json();
+      setFundosResult({ ...data, source: isEconomiaReal(selectedType) ? "cvm" : "anbima" });
+    } catch { toast({ title: "Erro de conexão", variant: "destructive" }); } finally { setFundosLoading(false); }
   };
 
-  const anbimaFiltered = (anbimaResult?.fundos || []).filter((f: any) => {
-    if (anbimaType && anbimaType !== "all") {
+  const fundosFiltered = (fundosResult?.fundos || []).filter((f: any) => {
+    if (fundosResult?.source !== "cvm" && selectedType && selectedType !== "all") {
       const cat = (f.categoria || "").toLowerCase();
-      if (anbimaType === "renda_fixa" && !cat.includes("renda fixa")) return false;
-      if (anbimaType === "acoes" && !cat.includes("ações")) return false;
-      if (anbimaType === "multimercados" && !cat.includes("multimercado")) return false;
-      if (anbimaType === "previdencia" && !cat.includes("previdência")) return false;
-      if (anbimaType === "cambial" && !cat.includes("cambial")) return false;
+      if (selectedType === "renda_fixa" && !cat.includes("renda fixa")) return false;
+      if (selectedType === "acoes" && !cat.includes("ações")) return false;
+      if (selectedType === "multimercados" && !cat.includes("multimercado")) return false;
+      if (selectedType === "previdencia" && !cat.includes("previdência")) return false;
+      if (selectedType === "cambial" && !cat.includes("cambial")) return false;
     }
-    if (anbimaSearch.trim()) {
-      const q = anbimaSearch.toLowerCase();
+    if (searchFilter.trim()) {
+      const q = searchFilter.toLowerCase();
       if (!f.nome?.toLowerCase().includes(q) && !f.cnpj?.includes(q)) return false;
     }
     return true;
@@ -72,11 +90,11 @@ export default function NorionConsultaFundosPage() {
     setShowCreateDialog(true);
   };
 
-  const openCreateFromANBIMA = (fundo: any) => {
+  const openCreateFromFundo = (fundo: any) => {
     setCreateInitialData({
       nome: fundo.nome || "",
       cnpj: fundo.cnpj || "",
-      categoria: fundo.categoria || "",
+      categoria: fundo.categoria || fundo.tipo || "",
     });
     setShowCreateDialog(true);
   };
@@ -86,13 +104,15 @@ export default function NorionConsultaFundosPage() {
     setCreateInitialData(undefined);
   };
 
+  const canBuscar = isEconomiaReal(selectedType) || settingsData?.configured;
+
   return (
     <div className="p-6 max-w-[1400px] mx-auto space-y-6">
       <div className="flex items-center gap-3">
         <Landmark className="w-7 h-7 text-amber-500" />
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-norion-consulta-title">Consulta de Fundos</h1>
-          <p className="text-sm text-muted-foreground">Pesquisar fundos na CVM e ANBIMA</p>
+          <p className="text-sm text-muted-foreground">Pesquisar fundos na CVM, ANBIMA e economia real</p>
         </div>
       </div>
 
@@ -128,42 +148,61 @@ export default function NorionConsultaFundosPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2"><FileText className="w-4 h-4" />Fundos Estruturados ANBIMA</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            {isEconomiaReal(selectedType) ? <Building2 className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+            {isEconomiaReal(selectedType) ? "Fundos de Economia Real (CVM)" : "Fundos Estruturados ANBIMA"}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-3">
-            <Select value={anbimaType} onValueChange={setAnbimaType}>
-              <SelectTrigger className="w-40" data-testid="select-n-anbima-tipo"><SelectValue placeholder="Categoria" /></SelectTrigger>
+            <Select value={selectedType} onValueChange={(val) => { setSelectedType(val); setFundosResult(null); setSearchFilter(""); }}>
+              <SelectTrigger className="w-48" data-testid="select-n-tipo-fundo"><SelectValue placeholder="Categoria" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="renda_fixa">Renda Fixa</SelectItem>
-                <SelectItem value="acoes">Ações</SelectItem>
-                <SelectItem value="multimercados">Multimercados</SelectItem>
-                <SelectItem value="previdencia">Previdência</SelectItem>
-                <SelectItem value="cambial">Cambial</SelectItem>
+                <SelectItem value="all">Todas (ANBIMA)</SelectItem>
+                <SelectGroup>
+                  <SelectLabel>Fundos Abertos (ANBIMA)</SelectLabel>
+                  <SelectItem value="renda_fixa">Renda Fixa</SelectItem>
+                  <SelectItem value="acoes">Ações</SelectItem>
+                  <SelectItem value="multimercados">Multimercados</SelectItem>
+                  <SelectItem value="previdencia">Previdência</SelectItem>
+                  <SelectItem value="cambial">Cambial</SelectItem>
+                </SelectGroup>
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectLabel>Economia Real (CVM)</SelectLabel>
+                  <SelectItem value="venture_capital">Venture Capital (FIP)</SelectItem>
+                  <SelectItem value="private_capital">Private Capital (FIP)</SelectItem>
+                  <SelectItem value="imobiliarios">Imobiliários (FII)</SelectItem>
+                  <SelectItem value="agricolas">Agrícolas (Fiagro)</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
-            <Button onClick={buscarANBIMA} disabled={anbimaLoading || !settingsData?.configured} data-testid="button-n-buscar-anbima">
-              {anbimaLoading ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Search className="w-4 h-4 mr-1.5" />}Buscar
+            <Button onClick={buscarFundos} disabled={fundosLoading || !canBuscar} data-testid="button-n-buscar-fundos">
+              {fundosLoading ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Search className="w-4 h-4 mr-1.5" />}Buscar
             </Button>
-            {anbimaResult?.fundos?.length > 0 && (
+            {fundosResult?.fundos?.length > 0 && (
               <div className="relative flex-1 min-w-[180px]">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input placeholder="Filtrar por nome..." value={anbimaSearch} onChange={(e) => setAnbimaSearch(e.target.value)} className="pl-8" />
+                <Input placeholder="Filtrar por nome..." value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)} className="pl-8" data-testid="input-n-filtro-nome" />
               </div>
             )}
           </div>
-          {!settingsData?.configured && (
+          {!isEconomiaReal(selectedType) && !settingsData?.configured && (
             <div className="border border-amber-800 rounded-md p-4 bg-amber-900/20">
               <div className="flex items-center gap-2 text-amber-400"><AlertTriangle className="w-4 h-4" /><p className="text-sm font-medium">ANBIMA não configurada</p></div>
-              <p className="text-xs text-muted-foreground mt-1">Configure as credenciais na página de Configurações.</p>
+              <p className="text-xs text-muted-foreground mt-1">Configure as credenciais na página de Configurações. Fundos de economia real (CVM) não precisam de credenciais.</p>
             </div>
           )}
-          {anbimaLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>}
-          {anbimaResult?.configured && !anbimaLoading && (
-            anbimaFiltered.length > 0 ? (
+          {fundosLoading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>}
+          {fundosResult && !fundosLoading && (
+            fundosFiltered.length > 0 ? (
               <>
-                <p className="text-xs text-muted-foreground mb-2">{anbimaFiltered.length} fundo(s) encontrado(s)</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-muted-foreground">{fundosFiltered.length} fundo(s) encontrado(s)</p>
+                  <Badge variant="outline" className="text-[10px]">
+                    {fundosResult.source === "cvm" ? "Fonte: CVM" : "Fonte: ANBIMA"}
+                  </Badge>
+                </div>
                 <Card>
                   <Table>
                     <TableHeader>
@@ -172,20 +211,28 @@ export default function NorionConsultaFundosPage() {
                         <TableHead>Tipo</TableHead>
                         <TableHead>Categoria</TableHead>
                         <TableHead>CNPJ</TableHead>
+                        {fundosResult.source === "cvm" && <TableHead>Patrimônio</TableHead>}
                         <TableHead>Situação</TableHead>
                         <TableHead className="text-center">Ação</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {anbimaFiltered.slice(0, 100).map((f: any, i: number) => (
-                        <TableRow key={i}>
+                      {fundosFiltered.slice(0, 200).map((f: any, i: number) => (
+                        <TableRow key={i} data-testid={`row-fundo-${i}`}>
                           <TableCell className="font-medium max-w-[280px] truncate">{f.nome || "—"}</TableCell>
                           <TableCell><Badge variant="outline" className="text-xs">{f.tipo || "—"}</Badge></TableCell>
-                          <TableCell className="text-sm">{f.categoria || "—"}</TableCell>
+                          <TableCell className="text-sm">{f.categoria || f.classeAnbima || "—"}</TableCell>
                           <TableCell className="font-mono text-xs">{f.cnpj || "—"}</TableCell>
-                          <TableCell><Badge variant={f.situacao === "Ativo" ? "default" : "secondary"} className="text-xs">{f.situacao || "—"}</Badge></TableCell>
+                          {fundosResult.source === "cvm" && <TableCell className="text-sm">{formatBRL(f.patrimonio)}</TableCell>}
+                          <TableCell>
+                            <Badge variant={
+                              f.situacao === "Ativo" || (f.situacao || "").includes("FUNCIONAMENTO") ? "default" : "secondary"
+                            } className="text-xs">
+                              {(f.situacao || "").includes("FUNCIONAMENTO") ? "Ativo" : f.situacao || "—"}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="text-center">
-                            <Button size="icon" variant="ghost" onClick={() => openCreateFromANBIMA(f)} data-testid={`button-anbima-add-${i}`}>
+                            <Button size="icon" variant="ghost" onClick={() => openCreateFromFundo(f)} data-testid={`button-fundo-add-${i}`}>
                               <Plus className="w-4 h-4" />
                             </Button>
                           </TableCell>
