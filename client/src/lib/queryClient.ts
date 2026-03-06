@@ -19,6 +19,11 @@ export async function apiRequest(
     credentials: "include",
   });
 
+  if (res.status === 401) {
+    queryClient.setQueryData(["/api/user"], null);
+    queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+  }
+
   await throwIfResNotOk(res);
   return res;
 }
@@ -33,8 +38,12 @@ export const getQueryFn: <T>(options: {
       credentials: "include",
     });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+    if (res.status === 401) {
+      queryClient.setQueryData(["/api/user"], null);
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      if (unauthorizedBehavior === "returnNull") {
+        return null;
+      }
     }
 
     await throwIfResNotOk(res);
