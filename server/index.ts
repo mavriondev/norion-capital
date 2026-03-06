@@ -23,6 +23,9 @@ app.use(
 
 app.use(express.urlencoded({ extended: false, limit: '30mb' }));
 
+import path from "path";
+app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",

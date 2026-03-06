@@ -17,14 +17,41 @@ The application follows a client-server architecture:
 - **Internal Notifications:** A system for internal notifications is implemented with a `norion_notificacoes` table, displaying unread counts and actions in the header.
 - **Document Management:** Includes file upload validation for size (max 10MB) and types (PDF, JPG, PNG, WebP).
 - **Form Field-Level Revision:** A `camposRevisao` mechanism in `norion_formulario_cliente` allows admins to flag specific form fields for revision. The client portal then restricts editing to only these flagged fields, highlighting them for correction.
+- **Google Drive Integration:** Uses `googleapis` library with service account or OAuth2 credentials (via `GOOGLE_APPLICATION_CREDENTIALS` env var). Falls back to local `uploads/` directory when Google credentials are not configured.
+
+## VPS Deployment
+The project is prepared for standalone deployment (no Replit dependencies):
+- All `@replit/*` Vite plugins removed from `vite.config.ts`
+- Google Drive connector replaced with standard `googleapis` library
+- Local file upload fallback when Google Drive is not configured
+- Static uploads served via `/uploads` route
+- Build: `npm run build` → outputs to `dist/`
+- Start: `NODE_ENV=production node dist/index.cjs`
+- Required env vars: `DATABASE_URL`, `SESSION_SECRET`, `PORT` (default 5000)
+- Optional: `GOOGLE_APPLICATION_CREDENTIALS` for Google Drive integration
 
 ## External Dependencies
-- **GitHub:** Used for project import (via Replit integrations).
-- **Google Drive:** Integrated for document uploads, with files stored in a dedicated "Norion Capital" folder.
-- **PostgreSQL:** Replit's built-in PostgreSQL database.
+- **Google Drive:** Integrated for document uploads via `googleapis` (optional, falls back to local storage).
+- **PostgreSQL:** Standard PostgreSQL database via `DATABASE_URL`.
 - **BrasilAPI:** Used for CNPJ lookup and company data enrichment (QSA, CNAE, status).
 - **DAP/CAF API:** For querying CAF data based on partners' CPFs.
 - **SICOR/BCB API:** For rural credit information.
 - **IBGE API:** For municipality data.
 - **AwesomeAPI:** For agricultural commodity quotes.
 - **Open-Meteo:** For weather data in agricultural regions.
+
+## Security
+- Portal login endpoints (`/api/norion-portal/login`, `/api/norion-portal/login-cpf`) have rate limiting (10 attempts per 15 min via `express-rate-limit`).
+- CPF/CNPJ validation with digit verification (`server/utils/validacao-documentos.ts`).
+- Server-side mandatory field validation on form submission (`formulario/finalizar`).
+
+## Key Files
+- `shared/schema.ts` — Drizzle ORM schema with all tables
+- `server/routes/norion.ts` — Main Norion API routes
+- `server/routes/norion-portal.ts` — Client portal API routes
+- `server/google-drive.ts` — Google Drive integration (with local fallback)
+- `server/auth.ts` — Authentication setup (Passport.js)
+- `server/storage.ts` — Storage interface and implementation
+- `server/utils/validacao-documentos.ts` — CPF/CNPJ validation utilities
+- `client/src/pages/` — All frontend pages
+- `script/build.ts` — Build script (esbuild + vite)

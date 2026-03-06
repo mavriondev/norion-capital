@@ -7,15 +7,36 @@ import { uploadToDrive } from "../google-drive";
 import { CHECKLIST_HOME_EQUITY, getChecklistForOperation, getDocumentPool } from "./norion";
 import { enrichCompany } from "../enrichment/company-enrichment";
 import crypto from "crypto";
+import rateLimit from "express-rate-limit";
+import { validarCPF, validarCNPJ } from "../utils/validacao-documentos";
 
 export function registerNorionPortalRoutes(app: Express, database: any) {
 
-  app.post("/api/norion-portal/login", async (req, res) => {
+  const portalLoginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Muitas tentativas de acesso. Aguarde 15 minutos e tente novamente." },
+    skipSuccessfulRequests: true,
+  });
+
+  app.post("/api/norion-portal/login", portalLoginLimiter, async (req, res) => {
     try {
       const { taxId, accessToken } = req.body;
       if (!taxId || !accessToken) return res.status(400).json({ message: "CPF/CNPJ e token são obrigatórios" });
 
       const cleanTaxId = taxId.replace(/\D/g, "");
+      if (cleanTaxId.length === 11 && !validarCPF(cleanTaxId)) {
+        return res.status(400).json({ message: "CPF inválido." });
+      }
+      if (cleanTaxId.length === 14 && !validarCNPJ(cleanTaxId)) {
+        return res.status(400).json({ message: "CNPJ inválido." });
+      }
+      if (cleanTaxId.length !== 11 && cleanTaxId.length !== 14) {
+        return res.status(400).json({ message: "CPF ou CNPJ inválido." });
+      }
+
       const [clientUser] = await db.select().from(norionClientUsers)
         .where(and(eq(norionClientUsers.taxId, cleanTaxId), eq(norionClientUsers.accessToken, accessToken)));
 
@@ -544,14 +565,20 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
     }
   });
 
-  app.post("/api/norion-portal/login-cpf",async (req, res) => {
+  app.post("/api/norion-portal/login-cpf", portalLoginLimiter, async (req, res) => {
     try {
       const { taxId } = req.body;
       if (!taxId) return res.status(400).json({ message: "CPF/CNPJ é obrigatório" });
 
       const cleanTaxId = taxId.replace(/\D/g, "");
+      if (cleanTaxId.length === 11 && !validarCPF(cleanTaxId)) {
+        return res.status(400).json({ message: "CPF inválido." });
+      }
+      if (cleanTaxId.length === 14 && !validarCNPJ(cleanTaxId)) {
+        return res.status(400).json({ message: "CNPJ inválido." });
+      }
       if (cleanTaxId.length !== 11 && cleanTaxId.length !== 14) {
-        return res.status(400).json({ message: "CPF ou CNPJ inválido" });
+        return res.status(400).json({ message: "CPF ou CNPJ inválido." });
       }
 
       const [clientUser] = await db.select().from(norionClientUsers)
@@ -751,6 +778,25 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
 
       if (existing.status === "enviado" || existing.status === "aprovado") {
         return res.status(403).json({ message: "Formulário já foi enviado." });
+      }
+
+      const camposObrigatorios: { campo: keyof typeof existing; label: string }[] = [
+        { campo: "nomeCompleto", label: "Nome completo" },
+        { campo: "cpf", label: "CPF" },
+        { campo: "email", label: "E-mail" },
+        { campo: "celular", label: "Celular" },
+        { campo: "cep", label: "CEP" },
+        { campo: "cidade", label: "Cidade" },
+        { campo: "uf", label: "Estado" },
+      ];
+      const camposFaltando = camposObrigatorios
+        .filter(({ campo }) => !existing[campo])
+        .map(({ label }) => label);
+      if (camposFaltando.length > 0) {
+        return res.status(422).json({
+          message: `Preencha os campos obrigatórios antes de finalizar: ${camposFaltando.join(", ")}.`,
+          camposFaltando,
+        });
       }
 
       const [updated] = await db.update(norionFormularioCliente)
