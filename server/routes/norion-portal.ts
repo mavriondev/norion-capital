@@ -145,6 +145,27 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
 
       if (!fileBase64 || !fileName) return res.status(400).json({ message: "fileBase64 e fileName são obrigatórios" });
 
+      // Validação de tipo MIME
+      const allowedMimeTypes = ["application/pdf", "image/jpeg", "image/jpg", "image/png", "image/webp"];
+      const detectedMime = mimeType || "application/octet-stream";
+      if (!allowedMimeTypes.includes(detectedMime)) {
+        return res.status(400).json({ message: "Tipo de arquivo não permitido. Envie apenas PDF, JPG ou PNG." });
+      }
+
+      // Validação de extensão do arquivo
+      const allowedExtensions = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+      const ext = "." + fileName.split(".").pop()?.toLowerCase();
+      if (!allowedExtensions.includes(ext)) {
+        return res.status(400).json({ message: "Extensão de arquivo não permitida. Use PDF, JPG ou PNG." });
+      }
+
+      // Validação de tamanho (máximo 10MB)
+      const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+      const fileBuffer = Buffer.from(fileBase64, "base64");
+      if (fileBuffer.length > MAX_SIZE_BYTES) {
+        return res.status(400).json({ message: `Arquivo muito grande. Tamanho máximo permitido: 10MB. Seu arquivo: ${(fileBuffer.length / 1024 / 1024).toFixed(1)}MB.` });
+      }
+
       const docConditions = [
         eq(norionDocuments.id, docId),
         eq(norionDocuments.orgId, client.orgId),
@@ -171,7 +192,6 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
         companyName = (client.name || client.taxId || "Cliente").replace(/[^a-zA-Z0-9_\- ]/g, "");
       }
 
-      const fileBuffer = Buffer.from(fileBase64, "base64");
       const result = await uploadToDrive(fileBuffer, fileName, mimeType || "application/pdf", ["Norion Capital", "Portal Cliente", companyName]);
 
       const [updated] = await db.update(norionDocuments)
@@ -431,41 +451,43 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
       const clients = await db.select().from(norionClientUsers)
         .where(eq(norionClientUsers.orgId, orgId));
 
-      const enriched = [];
-      for (const c of clients) {
-        let formularioStatus: string | null = null;
-        let formularioId: number | null = null;
-        let operationStage: string | null = null;
-        let companyName: string | null = null;
+      if (clients.length === 0) return res.json([]);
 
-        const [form] = await db.select().from(norionFormularioCliente)
-          .where(eq(norionFormularioCliente.clientUserId, c.id));
-        if (form) {
-          formularioStatus = form.status;
-          formularioId = form.id;
-        }
+      // Buscar todos os dados em paralelo (sem N+1 queries)
+      const clientIds = clients.map(c => c.id);
+      const operationIds = clients.map(c => c.operationId).filter(Boolean) as number[];
 
-        if (c.operationId) {
-          const [op] = await db.select().from(norionOperations)
-            .where(eq(norionOperations.id, c.operationId));
-          if (op) {
-            operationStage = op.stage;
-            if (op.companyId) {
-              const [comp] = await db.select().from(companies)
-                .where(eq(companies.id, op.companyId));
-              if (comp) companyName = (comp as any).legalName || (comp as any).tradeName || null;
-            }
-          }
-        }
+      const [formularios, operations] = await Promise.all([
+        db.select().from(norionFormularioCliente)
+          .where(inArray(norionFormularioCliente.clientUserId, clientIds)),
+        operationIds.length > 0
+          ? db.select().from(norionOperations).where(inArray(norionOperations.id, operationIds))
+          : Promise.resolve([]),
+      ]);
 
-        enriched.push({
+      // Buscar empresas das operações
+      const companyIds = operations.map((op: any) => op.companyId).filter(Boolean) as number[];
+      const companiesData = companyIds.length > 0
+        ? await db.select().from(companies).where(inArray(companies.id, companyIds))
+        : [];
+
+      // Criar mapas para lookup O(1)
+      const formularioByClientId = new Map(formularios.map(f => [f.clientUserId, f]));
+      const operationById = new Map(operations.map((op: any) => [op.id, op]));
+      const companyById = new Map(companiesData.map((c: any) => [c.id, c]));
+
+      const enriched = clients.map(c => {
+        const form = formularioByClientId.get(c.id);
+        const op = c.operationId ? operationById.get(c.operationId) : null;
+        const comp = op?.companyId ? companyById.get(op.companyId) : null;
+        return {
           ...c,
-          formularioStatus,
-          formularioId,
-          operationStage,
-          companyName,
-        });
-      }
+          formularioStatus: form?.status ?? null,
+          formularioId: form?.id ?? null,
+          operationStage: (op as any)?.stage ?? null,
+          companyName: (comp as any)?.legalName || (comp as any)?.tradeName || null,
+        };
+      });
 
       res.json(enriched);
     } catch (err: any) {
@@ -473,7 +495,7 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
     }
   });
 
-  app.post("/api/norion-portal/login-cpf", async (req, res) => {
+  app.post("/api/norion-portal/login-cpf",async (req, res) => {
     try {
       const { taxId } = req.body;
       if (!taxId) return res.status(400).json({ message: "CPF/CNPJ é obrigatório" });
@@ -740,6 +762,18 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
             severity: "success",
             createdBy: client.id,
           });
+
+          // Notificar todos os admins/gestores da org
+          await storage.criarNotificacao({
+            orgId: client.orgId,
+            userId: null,
+            clientUserId: null,
+            type: "formulario_enviado",
+            title: "📋 Formulário enviado",
+            message: `${existing.nomeCompleto || 'Cliente'} enviou o formulário de avaliação e aguarda revisão.`,
+            data: { formularioId: existing.id, operationId: existing.operationId, companyId },
+            read: false,
+          });
         }
       }
 
@@ -822,12 +856,25 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
         .returning();
 
       if (!updated) return res.status(404).json({ message: "Formulário não encontrado" });
+      // Notificar o cliente que precisa de revisão
+      if (updated.clientUserId) {
+        const orgId = getOrgId();
+        await storage.criarNotificacao({
+          orgId,
+          userId: null,
+          clientUserId: updated.clientUserId,
+          type: "revisao_pendente",
+          title: "⚠️ Formulário precisa de ajustes",
+          message: `Seu formulário foi analisado e precisa de correções. Motivo: ${observacao}`,
+          data: { formularioId: fId, observacao },
+          read: false,
+        });
+      }
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
-
   app.patch("/api/norion/formulario/:id/aprovar", requireAdminAuth, async (req, res) => {
     try {
       const fId = Number(req.params.id);
@@ -837,6 +884,20 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
         .returning();
 
       if (!updated) return res.status(404).json({ message: "Formulário não encontrado" });
+      // Notificar o cliente que o formulário foi aprovado
+      if (updated.clientUserId) {
+        const orgId = getOrgId();
+        await storage.criarNotificacao({
+          orgId,
+          userId: null,
+          clientUserId: updated.clientUserId,
+          type: "formulario_aprovado",
+          title: "✅ Formulário aprovado!",
+          message: "Seu formulário foi analisado e aprovado pela nossa equipe. Em breve entraremos em contato.",
+          data: { formularioId: fId },
+          read: false,
+        });
+      }
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ message: err.message });

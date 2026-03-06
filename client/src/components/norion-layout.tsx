@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard, LogOut, DollarSign,
   Building2, Menu, X, KanbanSquare,
   Settings2, BarChart3, Landmark, Handshake, Magnet,
   ChevronDown, FolderOpen, Briefcase, Users, Leaf, Search,
+  Bell, CheckCheck, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -86,6 +88,152 @@ const navEntries: NavEntry[] = [
   { href: "/portal-clientes", icon: Users, label: "Portal Clientes", exact: false },
   { href: "/relatorio", icon: BarChart3, label: "Relatórios", exact: false },
 ];
+
+// ============================================================
+// COMPONENTE DE NOTIFICAÇÕES
+// ============================================================
+function NotificacoesDropdown() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const qc = useQueryClient();
+
+  const { data: countData } = useQuery<{ count: number }>({
+    queryKey: ["/api/norion/notificacoes/count"],
+    refetchInterval: 30000,
+  });
+
+  const { data: notifs = [] } = useQuery<any[]>({
+    queryKey: ["/api/norion/notificacoes"],
+    enabled: open,
+  });
+
+  const marcarLida = useMutation({
+    mutationFn: async (id: number) => {
+      await fetch(`/api/norion/notificacoes/${id}/lida`, { method: "PATCH" });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/norion/notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["/api/norion/notificacoes/count"] });
+    },
+  });
+
+  const marcarTodasLidas = useMutation({
+    mutationFn: async () => {
+      await fetch("/api/norion/notificacoes/marcar-todas-lidas", { method: "PATCH" });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/norion/notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["/api/norion/notificacoes/count"] });
+    },
+  });
+
+  const deletar = useMutation({
+    mutationFn: async (id: number) => {
+      await fetch(`/api/norion/notificacoes/${id}`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/norion/notificacoes"] });
+      qc.invalidateQueries({ queryKey: ["/api/norion/notificacoes/count"] });
+    },
+  });
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const count = countData?.count ?? 0;
+
+  function formatTime(date: string) {
+    const d = new Date(date);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
+    if (diff < 60) return "agora";
+    if (diff < 3600) return `${Math.floor(diff / 60)}min`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="relative p-2 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+        title="Notificações"
+      >
+        <Bell className="w-4 h-4" />
+        {count > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+            {count > 99 ? "99+" : count}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-80 bg-[#1e293b] border border-[#334155] rounded-lg shadow-xl z-50 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[#334155]">
+            <span className="text-sm font-semibold text-white">Notificações</span>
+            {count > 0 && (
+              <button
+                onClick={() => marcarTodasLidas.mutate()}
+                className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition-colors"
+              >
+                <CheckCheck className="w-3 h-3" />
+                Marcar todas como lidas
+              </button>
+            )}
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {notifs.length === 0 ? (
+              <div className="px-4 py-8 text-center text-slate-400 text-sm">
+                Nenhuma notificação
+              </div>
+            ) : (
+              notifs.map((n: any) => (
+                <div
+                  key={n.id}
+                  className={cn(
+                    "flex items-start gap-3 px-4 py-3 border-b border-[#334155]/50 hover:bg-white/5 transition-colors",
+                    !n.read && "bg-amber-500/5 border-l-2 border-l-amber-500"
+                  )}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("text-sm font-medium truncate", n.read ? "text-slate-300" : "text-white")}>
+                      {n.title}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{n.message}</p>
+                    <p className="text-xs text-slate-500 mt-1">{formatTime(n.createdAt)}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {!n.read && (
+                      <button
+                        onClick={() => marcarLida.mutate(n.id)}
+                        className="p-1 rounded text-slate-400 hover:text-amber-400 transition-colors"
+                        title="Marcar como lida"
+                      >
+                        <CheckCheck className="w-3 h-3" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => deletar.mutate(n.id)}
+                      className="p-1 rounded text-slate-400 hover:text-red-400 transition-colors"
+                      title="Remover"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function NavLink({ href, icon: Icon, label, exact = true }: NavItem) {
   const [location] = useLocation();
@@ -277,6 +425,7 @@ export default function NorionSidebar() {
         </div>
 
         <div className="flex items-center gap-3 ml-auto shrink-0">
+          <NotificacoesDropdown />
           <Link
             href="/configuracoes"
             className="hidden lg:flex p-2 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors"

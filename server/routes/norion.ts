@@ -604,18 +604,36 @@ export function registerNorionRoutes(app: Express, db: any) {
     }
   });
 
-  app.post("/api/norion/seed-demo", async (req, res) => {
+  app.post("/api/norion/seed-demo", async (req: any, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autorizado" });
     try {
       const orgId = getOrgId();
+      const { confirmar } = req.body;
+
+      // Verificar se há dados reais (operações com valor aprovado ou comissão recebida)
+      const operacoesReais = await db.select().from(norionOperations)
+        .where(and(
+          eq(norionOperations.orgId, orgId),
+          or(
+            eq(norionOperations.comissaoRecebida, true),
+            sql`${norionOperations.valorAprovado} IS NOT NULL AND ${norionOperations.valorAprovado} > 0`
+          )
+        ));
+
+      if (operacoesReais.length > 0 && confirmar !== "CONFIRMAR_DEMO") {
+        return res.status(409).json({
+          message: `Atenção! Existem ${operacoesReais.length} operações com dados reais. Carregar o demo irá DELETAR TODAS as operações. Confirme digitando CONFIRMAR_DEMO.`,
+          operacoesReais: operacoesReais.length,
+          requiresConfirmation: true,
+        });
+      }
 
       const empresas = await db.select().from(companies)
         .where(eq(companies.orgId, orgId))
         .limit(6);
-
       if (empresas.length === 0) {
         return res.status(400).json({ message: "Cadastre algumas empresas antes de rodar o demo" });
       }
-
       await db.delete(norionOperations).where(eq(norionOperations.orgId, orgId));
 
       const operacoesDemo = [
@@ -2026,6 +2044,62 @@ export function registerNorionRoutes(app: Express, db: any) {
         .orderBy(desc(companyDataSources.createdAt));
       
       res.json(sources);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ============================================================
+  // ENDPOINTS DE NOTIFICAÇÕES INTERNAS
+  // ============================================================
+
+  app.get("/api/norion/notificacoes", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const userId = (req.user as any).id;
+      const notifs = await storage.getNotificacoesUsuario(orgId, userId, 30);
+      const orgNotifs = await storage.getNotificacoesOrg(orgId, 10);
+      const all = [...notifs, ...orgNotifs].sort((a, b) =>
+        new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
+      ).slice(0, 30);
+      res.json(all);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/norion/notificacoes/count", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const userId = (req.user as any).id;
+      const count = await storage.contarNaoLidas(orgId, userId);
+      res.json({ count });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/norion/notificacoes/marcar-todas-lidas", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      const userId = (req.user as any).id;
+      await storage.marcarTodasLidas(orgId, userId);
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/norion/notificacoes/:id/lida", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      await storage.marcarNotificacaoLida(Number(req.params.id), orgId);
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/norion/notificacoes/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Não autenticado" });
+    try {
+      const orgId = getOrgId();
+      await storage.deletarNotificacao(Number(req.params.id), orgId);
+      res.json({ ok: true });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

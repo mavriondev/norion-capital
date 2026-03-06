@@ -4,7 +4,7 @@ import {
   users, organizations, companies, orgSettings,
   norionOperations, norionDocuments, norionFundosParceiros, norionEnviosFundos,
   norionCafRegistros, norionClientUsers, norionFormularioCliente,
-  companyApiQueries, companyDataSources, companyTimelineEvents,
+  companyApiQueries, companyDataSources, companyTimelineEvents, norionNotificacoes,
   type User, type InsertCompany, type Company,
   type NorionDocument, type InsertNorionDocument,
   type NorionFundoParceiro, type InsertNorionFundoParceiro,
@@ -12,6 +12,7 @@ import {
   type CompanyApiQuery, type InsertCompanyApiQuery,
   type CompanyDataSource, type InsertCompanyDataSource,
   type CompanyTimelineEvent, type InsertCompanyTimelineEvent,
+  type NorionNotificacao, type InsertNorionNotificacao,
 } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 import session from "express-session";
@@ -247,6 +248,72 @@ class DatabaseStorage {
       .where(and(eq(companyTimelineEvents.companyId, companyId), eq(companyTimelineEvents.orgId, orgId)))
       .orderBy(desc(companyTimelineEvents.createdAt))
       .limit(limit);
+  }
+
+  // Métodos para notificações internas
+  async criarNotificacao(data: InsertNorionNotificacao): Promise<NorionNotificacao> {
+    const [created] = await db.insert(norionNotificacoes).values(data).returning();
+    return created;
+  }
+
+  async getNotificacoesUsuario(orgId: number, userId: number, limit: number = 30): Promise<NorionNotificacao[]> {
+    return db.select().from(norionNotificacoes)
+      .where(and(
+        eq(norionNotificacoes.orgId, orgId),
+        eq(norionNotificacoes.userId, userId)
+      ))
+      .orderBy(desc(norionNotificacoes.createdAt))
+      .limit(limit);
+  }
+
+  async getNotificacoesOrg(orgId: number, limit: number = 30): Promise<NorionNotificacao[]> {
+    // Retorna notificações sem userId específico (para todos da org)
+    const { isNull } = await import("drizzle-orm");
+    return db.select().from(norionNotificacoes)
+      .where(and(
+        eq(norionNotificacoes.orgId, orgId),
+        isNull(norionNotificacoes.userId)
+      ))
+      .orderBy(desc(norionNotificacoes.createdAt))
+      .limit(limit);
+  }
+
+  async getNotificacoesCliente(orgId: number, clientUserId: number, limit: number = 20): Promise<NorionNotificacao[]> {
+    return db.select().from(norionNotificacoes)
+      .where(and(
+        eq(norionNotificacoes.orgId, orgId),
+        eq(norionNotificacoes.clientUserId, clientUserId)
+      ))
+      .orderBy(desc(norionNotificacoes.createdAt))
+      .limit(limit);
+  }
+
+  async marcarNotificacaoLida(id: number, orgId: number): Promise<void> {
+    await db.update(norionNotificacoes)
+      .set({ read: true })
+      .where(and(eq(norionNotificacoes.id, id), eq(norionNotificacoes.orgId, orgId)));
+  }
+
+  async marcarTodasLidas(orgId: number, userId: number): Promise<void> {
+    await db.update(norionNotificacoes)
+      .set({ read: true })
+      .where(and(eq(norionNotificacoes.orgId, orgId), eq(norionNotificacoes.userId, userId)));
+  }
+
+  async deletarNotificacao(id: number, orgId: number): Promise<void> {
+    await db.delete(norionNotificacoes)
+      .where(and(eq(norionNotificacoes.id, id), eq(norionNotificacoes.orgId, orgId)));
+  }
+
+  async contarNaoLidas(orgId: number, userId: number): Promise<number> {
+    const { count } = await import("drizzle-orm");
+    const result = await db.select({ count: count() }).from(norionNotificacoes)
+      .where(and(
+        eq(norionNotificacoes.orgId, orgId),
+        eq(norionNotificacoes.userId, userId),
+        eq(norionNotificacoes.read, false)
+      ));
+    return result[0]?.count ?? 0;
   }
 }
 

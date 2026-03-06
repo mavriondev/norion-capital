@@ -308,3 +308,20 @@ export const companyTimelineEvents = pgTable("company_timeline_events", {
 export const insertCompanyTimelineEventSchema = createInsertSchema(companyTimelineEvents).omit({ id: true, createdAt: true });
 export type InsertCompanyTimelineEvent = z.infer<typeof insertCompanyTimelineEventSchema>;
 export type CompanyTimelineEvent = typeof companyTimelineEvents.$inferSelect;
+
+// Tabela de notificações internas do sistema
+export const norionNotificacoes = pgTable("norion_notificacoes", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").references(() => organizations.id).notNull(),
+  userId: integer("user_id").references(() => users.id), // null = todos admins/gestores da org
+  clientUserId: integer("client_user_id").references(() => norionClientUsers.id), // se for para cliente
+  type: text("type").notNull(), // "formulario_enviado", "documento_rejeitado", "operacao_aprovada", "revisao_pendente", "formulario_aprovado", "documento_aprovado"
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  data: jsonb("data"), // dados extras (operationId, companyName, documentId, etc.)
+  read: boolean("read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertNorionNotificacaoSchema = createInsertSchema(norionNotificacoes).omit({ id: true, createdAt: true });
+export type InsertNorionNotificacao = z.infer<typeof insertNorionNotificacaoSchema>;
+export type NorionNotificacao = typeof norionNotificacoes.$inferSelect;
