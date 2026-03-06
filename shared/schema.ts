@@ -119,6 +119,30 @@ export const norionFundosParceiros = pgTable("norion_fundos_parceiros", {
   contatoTelefone: text("contato_telefone"),
   observacoes: text("observacoes"),
   ativo: boolean("ativo").default(true),
+  criteriosAnalise: jsonb("criterios_analise").$type<{
+    faturamentoMinimo?: number | null;
+    tempoEmpresaMinimo?: number | null;
+    capitalSocialMinimo?: number | null;
+    areaRuralMinima?: number | null;
+    exigeCaf?: boolean;
+    exigeCnpjAtivo?: boolean;
+    enquadramentoPronaf?: string[] | null;
+    cnaesAceitos?: string[] | null;
+    cnaesVetados?: string[] | null;
+    ufsAceitas?: string[] | null;
+    ufsVetadas?: string[] | null;
+    porteAceito?: string[] | null;
+    exigeGarantiaReal?: boolean;
+    ltvMaximo?: number | null;
+    documentosExigidos?: string[] | null;
+  }>(),
+  condicoesComerciais: jsonb("condicoes_comerciais").$type<{
+    taxaJurosMin?: number | null;
+    taxaJurosMax?: number | null;
+    prazoRespostaDias?: number | null;
+    comissaoPercentual?: number | null;
+    notasInternas?: string | null;
+  }>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -250,6 +274,7 @@ export const norionFormularioCliente = pgTable("norion_formulario_cliente", {
   currentStep: integer("current_step").default(1),
   status: text("status").notNull().default("rascunho"),
   observacaoRevisao: text("observacao_revisao"),
+  camposRevisao: jsonb("campos_revisao").default([]),
   completedAt: timestamp("completed_at"),
   dadosExtras: jsonb("dados_extras").default({}),
   createdAt: timestamp("created_at").defaultNow(),

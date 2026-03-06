@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Loader2, Upload, Camera, Check, X, FileText, User,
   Home, Wallet, ClipboardList, LogOut, Building2, Eye,
-  ChevronDown, ChevronUp, MapPin,
+  ChevronDown, ChevronUp, MapPin, AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -104,6 +104,12 @@ export default function PortalClienteDashboard() {
   const { data: docs = [], isLoading: docsLoading } = useQuery({
     queryKey: ["/api/norion-portal/documentos"],
     queryFn: () => portalFetch("/api/norion-portal/documentos"),
+    enabled: !!client,
+  });
+
+  const { data: formData } = useQuery({
+    queryKey: ["/api/norion-portal/formulario"],
+    queryFn: () => portalFetch("/api/norion-portal/formulario"),
     enabled: !!client,
   });
 
@@ -221,7 +227,10 @@ export default function PortalClienteDashboard() {
 
   const totalDocs = (docs as any[]).length;
   const sentDocs = (docs as any[]).filter((d: any) => d.status === "enviado" || d.status === "aprovado").length;
+  const rejectedDocs = (docs as any[]).filter((d: any) => d.status === "rejeitado");
   const progressPercent = totalDocs > 0 ? Math.round((sentDocs / totalDocs) * 100) : 0;
+  const formInRevision = formData?.status === "em_revisao";
+  const hasAlerts = rejectedDocs.length > 0 || formInRevision;
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -271,6 +280,25 @@ export default function PortalClienteDashboard() {
           </CardContent>
         </Card>
 
+        {hasAlerts && (
+          <div className="rounded-lg border border-amber-600/50 bg-amber-950/30 p-4 space-y-2" data-testid="banner-alerts">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
+              <span className="text-sm font-semibold text-amber-300">Atenção — itens precisam de correção</span>
+            </div>
+            {rejectedDocs.length > 0 && (
+              <p className="text-xs text-amber-200/80">
+                {rejectedDocs.length} documento{rejectedDocs.length > 1 ? "s" : ""} rejeitado{rejectedDocs.length > 1 ? "s" : ""} — revise e envie novamente.
+              </p>
+            )}
+            {formInRevision && (
+              <button onClick={() => setLocation("/portal-cliente/formulario")} className="text-xs text-amber-200/80 hover:text-amber-100 underline cursor-pointer block" data-testid="link-form-revision-alert">
+                Formulário em revisão — clique para corrigir os campos solicitados.
+              </button>
+            )}
+          </div>
+        )}
+
         {docsLoading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -281,9 +309,10 @@ export default function PortalClienteDashboard() {
             if (catDocs.length === 0) return null;
             const CatIcon = catConfig.icon;
             const isExpanded = expandedCategories[catKey];
+            const catRejected = catDocs.filter((d: any) => d.status === "rejeitado").length;
 
             return (
-              <Card key={catKey} data-testid={`card-portal-category-${catKey}`}>
+              <Card key={catKey} className={cn(catRejected > 0 && "border-red-600/40")} data-testid={`card-portal-category-${catKey}`}>
                 <CardContent className="p-0">
                   <button
                     className="w-full flex items-center justify-between p-4 text-left"
@@ -294,20 +323,29 @@ export default function PortalClienteDashboard() {
                       <CatIcon className={cn("w-4 h-4", catConfig.color)} />
                       <span className="font-medium text-sm">{catConfig.label}</span>
                       <Badge variant="secondary" className="text-[10px] h-5">{catDocs.length}</Badge>
+                      {catRejected > 0 && (
+                        <Badge variant="destructive" className="text-[10px] h-5">{catRejected} rejeitado{catRejected > 1 ? "s" : ""}</Badge>
+                      )}
                     </div>
                     {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                   </button>
 
                   {isExpanded && (
                     <div className="px-4 pb-4 space-y-2">
-                      {catDocs.map((doc: any) => {
+                      {[...catDocs].sort((a: any, b: any) => (a.status === "rejeitado" ? -1 : 0) - (b.status === "rejeitado" ? -1 : 0)).map((doc: any) => {
                         const statusConf = STATUS_CONFIG[doc.status] || STATUS_CONFIG.pendente;
                         const isUploading = uploadMutation.isPending && uploadingDocId === doc.id;
+                        const isRejected = doc.status === "rejeitado";
 
                         return (
                           <div
                             key={doc.id}
-                            className="flex items-center justify-between p-3 rounded-lg border border-slate-700 bg-slate-800/60"
+                            className={cn(
+                              "flex items-center justify-between p-3 rounded-lg border",
+                              isRejected
+                                ? "border-red-600/60 bg-red-950/20"
+                                : "border-slate-700 bg-slate-800/60"
+                            )}
                             data-testid={`portal-doc-${doc.id}`}
                           >
                             <div className="flex-1 min-w-0 mr-3">
@@ -316,10 +354,11 @@ export default function PortalClienteDashboard() {
                                 <Badge variant={statusConf.variant} className="text-[10px]">{statusConf.label}</Badge>
                                 {doc.obrigatorio && <span className="text-[10px] text-red-500">Obrigatório</span>}
                               </div>
-                              {doc.status === "rejeitado" && doc.observacao && (
-                                <p className="text-xs text-red-400 mt-1" data-testid={`text-rejection-reason-${doc.id}`}>
-                                  {doc.observacao}
-                                </p>
+                              {isRejected && doc.observacao && (
+                                <div className="flex items-start gap-1.5 mt-1.5 p-1.5 rounded bg-red-950/40 border border-red-800/30" data-testid={`text-rejection-reason-${doc.id}`}>
+                                  <AlertTriangle className="w-3 h-3 text-red-400 mt-0.5 flex-shrink-0" />
+                                  <p className="text-xs text-red-300">{doc.observacao}</p>
+                                </div>
                               )}
                             </div>
 

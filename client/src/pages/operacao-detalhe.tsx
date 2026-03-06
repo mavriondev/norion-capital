@@ -11,8 +11,14 @@ import {
   Upload, ExternalLink, Check, XCircle, ChevronDown, ChevronUp,
   User, Home, Wallet, ClipboardList, Handshake, Star,
   Shield, Landmark, FileDown, Leaf, Tractor,
-  Plus, Trash2, Package,
+  Plus, Trash2, Package, Ban, Info, MapPin, Briefcase, Percent,
+  BarChart3, TrendingUp, Target,
 } from "lucide-react";
+import {
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  Cell, Legend,
+} from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +30,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 const STAGES = [
   { key: "identificado", label: "Identificado", icon: Search, color: "bg-slate-800/40 border-slate-600" },
@@ -78,6 +85,8 @@ function DocumentChecklist({ operationId, finalidade }: { operationId: number; f
   const { toast } = useToast();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [showAddPanel, setShowAddPanel] = useState(false);
+  const [rejectDocId, setRejectDocId] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   const { data, isLoading } = useQuery<any>({
     queryKey: ["/api/norion/operations", operationId, "documents"],
@@ -298,7 +307,7 @@ function DocumentChecklist({ operationId, finalidade }: { operationId: number; f
                           </Button>
                         )}
                         {doc.status !== "rejeitado" && doc.status !== "pendente" && (
-                          <Button variant="ghost" size="sm" className="h-7 text-xs text-red-400" onClick={() => updateDocMutation.mutate({ docId: doc.id, data: { status: "rejeitado" } })}>
+                          <Button variant="ghost" size="sm" className="h-7 text-xs text-red-400" onClick={() => { setRejectDocId(doc.id); setRejectReason(""); }} data-testid={`button-reject-doc-${doc.id}`}>
                             <XCircle className="w-3 h-3 mr-1" /> Rejeitar
                           </Button>
                         )}
@@ -359,6 +368,543 @@ function DocumentChecklist({ operationId, finalidade }: { operationId: number; f
           )}
         </div>
       )}
+
+      <Dialog open={rejectDocId !== null} onOpenChange={(open) => { if (!open) setRejectDocId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-400">
+              <XCircle className="w-5 h-5" /> Rejeitar Documento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Informe o motivo da rejeição para que o cliente saiba o que precisa corrigir.
+            </p>
+            <Textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Ex: Documento ilegível, envie novamente com melhor qualidade..."
+              rows={3}
+              className="text-sm"
+              data-testid="input-reject-reason"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setRejectDocId(null)} data-testid="button-cancel-reject">
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={!rejectReason.trim() || updateDocMutation.isPending}
+              onClick={() => {
+                if (rejectDocId) {
+                  updateDocMutation.mutate(
+                    { docId: rejectDocId, data: { status: "rejeitado", observacao: rejectReason.trim() } },
+                    { onSuccess: () => { setRejectDocId(null); setRejectReason(""); toast({ title: "Documento rejeitado" }); } }
+                  );
+                }
+              }}
+              data-testid="button-confirm-reject"
+            >
+              {updateDocMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <XCircle className="w-4 h-4 mr-1" />}
+              Confirmar Rejeição
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ScoreBar({ score }: { score: number }) {
+  const color = score >= 75 ? "bg-green-500" : score >= 50 ? "bg-yellow-500" : "bg-orange-500";
+  const textColor = score >= 75 ? "text-green-400" : score >= 50 ? "text-yellow-400" : "text-orange-400";
+  return (
+    <div className="flex items-center gap-2" data-testid="score-bar">
+      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${score}%` }} />
+      </div>
+      <span className={cn("text-xs font-bold tabular-nums", textColor)}>{score}%</span>
+    </div>
+  );
+}
+
+function FundoCriteriosCollapsible({ fundo }: { fundo: any }) {
+  const [open, setOpen] = useState(false);
+  const crit = fundo.criteriosAnalise || {};
+  const cond = fundo.condicoesComerciais || {};
+
+  const hasAnyCriteria = crit.faturamentoMinimo || crit.tempoEmpresaMinimo || crit.capitalSocialMinimo ||
+    crit.areaRuralMinima || crit.exigeCaf || crit.exigeCnpjAtivo || crit.exigeGarantiaReal ||
+    crit.ltvMaximo || (crit.ufsAceitas && crit.ufsAceitas.length > 0) ||
+    (crit.ufsVetadas && crit.ufsVetadas.length > 0) || (crit.porteAceito && crit.porteAceito.length > 0) ||
+    (crit.cnaesAceitos && crit.cnaesAceitos.length > 0) || (crit.documentosExigidos && crit.documentosExigidos.length > 0);
+
+  const hasAnyCond = cond.taxaJurosMin || cond.taxaJurosMax || cond.prazoRespostaDias || cond.comissaoPercentual;
+
+  if (!hasAnyCriteria && !hasAnyCond) return null;
+
+  return (
+    <div className="border rounded-md overflow-hidden" data-testid="criterios-fundo-collapsible">
+      <button
+        className="w-full flex items-center justify-between p-2 bg-muted/20 hover:bg-muted/40 transition-colors text-xs"
+        onClick={() => setOpen(!open)}
+        data-testid="button-toggle-criterios"
+      >
+        <div className="flex items-center gap-1.5">
+          <Info className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="font-medium">Critérios do Fundo</span>
+        </div>
+        {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+      </button>
+      {open && (
+        <div className="p-2.5 space-y-2.5 text-xs">
+          {hasAnyCriteria && (
+            <div className="space-y-1.5">
+              <p className="font-medium text-muted-foreground flex items-center gap-1"><Shield className="w-3 h-3" /> Requisitos</p>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 ml-4">
+                {crit.faturamentoMinimo != null && (
+                  <div><span className="text-muted-foreground">Faturamento mín:</span> <span className="font-medium">R$ {(crit.faturamentoMinimo / 1000).toFixed(0)}k</span></div>
+                )}
+                {crit.capitalSocialMinimo != null && (
+                  <div><span className="text-muted-foreground">Capital social mín:</span> <span className="font-medium">R$ {(crit.capitalSocialMinimo / 1000).toFixed(0)}k</span></div>
+                )}
+                {crit.tempoEmpresaMinimo != null && (
+                  <div><span className="text-muted-foreground">Tempo empresa mín:</span> <span className="font-medium">{crit.tempoEmpresaMinimo} anos</span></div>
+                )}
+                {crit.ltvMaximo != null && (
+                  <div><span className="text-muted-foreground">LTV máx:</span> <span className="font-medium">{crit.ltvMaximo}%</span></div>
+                )}
+                {crit.areaRuralMinima != null && (
+                  <div><span className="text-muted-foreground">Área rural mín:</span> <span className="font-medium">{crit.areaRuralMinima} ha</span></div>
+                )}
+                {crit.exigeCaf && <div className="text-muted-foreground">Exige CAF/DAP ativo</div>}
+                {crit.exigeCnpjAtivo && <div className="text-muted-foreground">Exige CNPJ ativo</div>}
+                {crit.exigeGarantiaReal && <div className="text-muted-foreground">Exige garantia real</div>}
+              </div>
+              {crit.porteAceito && crit.porteAceito.length > 0 && (
+                <div className="ml-4 flex items-center gap-1 flex-wrap">
+                  <span className="text-muted-foreground">Portes:</span>
+                  {crit.porteAceito.map((p: string) => (
+                    <Badge key={p} variant="outline" className="text-[10px]">{p}</Badge>
+                  ))}
+                </div>
+              )}
+              {crit.ufsAceitas && crit.ufsAceitas.length > 0 && (
+                <div className="ml-4 flex items-center gap-1 flex-wrap">
+                  <span className="text-muted-foreground"><MapPin className="w-3 h-3 inline" /> UFs:</span>
+                  {crit.ufsAceitas.map((u: string) => (
+                    <Badge key={u} variant="outline" className="text-[10px]">{u}</Badge>
+                  ))}
+                </div>
+              )}
+              {crit.documentosExigidos && crit.documentosExigidos.length > 0 && (
+                <div className="ml-4">
+                  <span className="text-muted-foreground">Documentos exigidos:</span>
+                  <span className="ml-1">{crit.documentosExigidos.join(", ")}</span>
+                </div>
+              )}
+            </div>
+          )}
+          {hasAnyCond && (
+            <div className="space-y-1.5">
+              <p className="font-medium text-muted-foreground flex items-center gap-1"><Percent className="w-3 h-3" /> Condições Comerciais</p>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 ml-4">
+                {(cond.taxaJurosMin != null || cond.taxaJurosMax != null) && (
+                  <div>
+                    <span className="text-muted-foreground">Taxa juros:</span>{" "}
+                    <span className="font-medium">
+                      {cond.taxaJurosMin != null && cond.taxaJurosMax != null
+                        ? `${cond.taxaJurosMin}% - ${cond.taxaJurosMax}% a.a.`
+                        : cond.taxaJurosMin != null ? `a partir de ${cond.taxaJurosMin}% a.a.` : `até ${cond.taxaJurosMax}% a.a.`}
+                    </span>
+                  </div>
+                )}
+                {cond.prazoRespostaDias != null && (
+                  <div><span className="text-muted-foreground">Prazo resposta:</span> <span className="font-medium">{cond.prazoRespostaDias} dias</span></div>
+                )}
+                {cond.comissaoPercentual != null && (
+                  <div><span className="text-muted-foreground">Comissão:</span> <span className="font-medium">{cond.comissaoPercentual}%</span></div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const DIMENSION_LABELS: Record<string, string> = {
+  operacao: "Operação",
+  valor: "Valor",
+  garantias: "Garantias",
+  perfilFinanceiro: "Perfil Fin.",
+  perfilAgro: "Perfil Agro",
+  conformidade: "Conformidade",
+  historico: "Histórico",
+};
+
+const FUND_COLORS = [
+  "#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#f87171", "#fb923c",
+];
+
+function MatchingGraphDialog({ matching, open, onOpenChange }: { matching: any[]; open: boolean; onOpenChange: (v: boolean) => void }) {
+  const [selectedFundoId, setSelectedFundoId] = useState<number | null>(null);
+
+  const recomendados = matching.filter((m: any) => !m.eliminado && m.score > 0);
+  const incompativeis = matching.filter((m: any) => m.eliminado);
+
+  const barData = recomendados.map((m: any, i: number) => ({
+    nome: m.fundo.nome.length > 25 ? m.fundo.nome.substring(0, 22) + "..." : m.fundo.nome,
+    nomeCompleto: m.fundo.nome,
+    score: m.score,
+    color: FUND_COLORS[i % FUND_COLORS.length],
+    id: m.fundo.id,
+    reasons: m.reasons?.length || 0,
+    gaps: m.gaps?.length || 0,
+  })).sort((a: any, b: any) => b.score - a.score);
+
+  const radarKeys = ["operacao", "valor", "garantias", "perfilFinanceiro", "perfilAgro", "conformidade", "historico"];
+  const radarData = radarKeys.map(key => {
+    const entry: any = { dimension: DIMENSION_LABELS[key] || key };
+    recomendados.forEach((m: any, i: number) => {
+      const bd = m.scoreBreakdown?.[key];
+      entry[m.fundo.nome] = bd ? Math.round((bd.pontos / bd.max) * 100) : 0;
+    });
+    return entry;
+  });
+
+  const selectedFundo = selectedFundoId ? matching.find((m: any) => m.fundo.id === selectedFundoId) : null;
+
+  const selectedBreakdown = selectedFundo?.scoreBreakdown
+    ? radarKeys.map(key => {
+        const bd = selectedFundo.scoreBreakdown[key];
+        return {
+          dimension: DIMENSION_LABELS[key] || key,
+          percentual: bd ? Math.round((bd.pontos / bd.max) * 100) : 0,
+          pontos: bd?.pontos || 0,
+          max: bd?.max || 0,
+        };
+      })
+    : [];
+
+  const CustomBarTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.[0]) return null;
+    const d = payload[0].payload;
+    return (
+      <div className="bg-slate-800 border border-slate-600 rounded-lg p-3 shadow-xl" data-testid="tooltip-bar">
+        <p className="text-sm font-medium text-white mb-1">{d.nomeCompleto}</p>
+        <p className="text-lg font-bold" style={{ color: d.color }}>{d.score}%</p>
+        <div className="flex gap-3 mt-1 text-[11px]">
+          <span className="text-green-400">{d.reasons} atende</span>
+          <span className="text-amber-400">{d.gaps} pendência{d.gaps !== 1 ? "s" : ""}</span>
+        </div>
+      </div>
+    );
+  };
+
+  const CustomRadarTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.[0]) return null;
+    return (
+      <div className="bg-slate-800 border border-slate-600 rounded-lg p-2 shadow-xl">
+        <p className="text-xs font-medium text-white mb-1">{payload[0].payload.dimension}</p>
+        {payload.map((p: any, i: number) => (
+          <div key={i} className="flex items-center gap-1.5 text-[11px]">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color || FUND_COLORS[i] }} />
+            <span className="text-muted-foreground">{p.name}:</span>
+            <span className="font-medium text-white">{p.value}%</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-matching-graph">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-cyan-400" />
+            Análise Visual de Matching
+          </DialogTitle>
+        </DialogHeader>
+
+        {recomendados.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Target className="w-10 h-10 mx-auto mb-3 opacity-40" />
+            <p className="text-sm">Nenhum fundo compatível encontrado para esta operação</p>
+            {incompativeis.length > 0 && (
+              <p className="text-xs mt-1">{incompativeis.length} fundo(s) eliminado(s) por critérios obrigatórios</p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 text-center" data-testid="stat-total-funds">
+                <p className="text-2xl font-bold text-cyan-400">{recomendados.length}</p>
+                <p className="text-[11px] text-muted-foreground">Fundos Compatíveis</p>
+              </div>
+              <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 text-center" data-testid="stat-best-score">
+                <p className="text-2xl font-bold text-green-400">{barData[0]?.score || 0}%</p>
+                <p className="text-[11px] text-muted-foreground">Melhor Score</p>
+              </div>
+              <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 text-center" data-testid="stat-eliminated">
+                <p className="text-2xl font-bold text-red-400">{incompativeis.length}</p>
+                <p className="text-[11px] text-muted-foreground">Eliminados</p>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="w-4 h-4 text-cyan-400" />
+                <span className="text-sm font-medium">Ranking de Fundos</span>
+              </div>
+              <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-4" data-testid="chart-ranking">
+                <ResponsiveContainer width="100%" height={Math.max(recomendados.length * 55, 120)}>
+                  <BarChart data={barData} layout="vertical" margin={{ left: 10, right: 30, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                    <XAxis type="number" domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={{ stroke: '#475569' }} axisLine={{ stroke: '#475569' }} />
+                    <YAxis type="category" dataKey="nome" tick={{ fill: '#e2e8f0', fontSize: 12 }} width={160} tickLine={false} axisLine={false} />
+                    <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(148,163,184,0.08)' }} />
+                    <Bar dataKey="score" radius={[0, 6, 6, 0]} barSize={24} onClick={(d: any) => setSelectedFundoId(d.id)} style={{ cursor: 'pointer' }}>
+                      {barData.map((entry: any, index: number) => (
+                        <Cell
+                          key={entry.id}
+                          fill={entry.score >= 75 ? '#22c55e' : entry.score >= 50 ? '#eab308' : '#f97316'}
+                          fillOpacity={selectedFundoId === entry.id ? 1 : 0.75}
+                          stroke={selectedFundoId === entry.id ? '#fff' : 'transparent'}
+                          strokeWidth={selectedFundoId === entry.id ? 2 : 0}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap gap-1.5 mt-3 justify-center">
+                  {barData.map((entry: any) => (
+                    <button
+                      key={entry.id}
+                      className={cn(
+                        "text-[11px] px-2.5 py-1 rounded-full border transition-all",
+                        selectedFundoId === entry.id
+                          ? "bg-cyan-900/40 border-cyan-500 text-cyan-300"
+                          : "border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200"
+                      )}
+                      onClick={() => setSelectedFundoId(selectedFundoId === entry.id ? null : entry.id)}
+                      data-testid={`button-select-fund-${entry.id}`}
+                    >
+                      {entry.nomeCompleto} — {entry.score}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {recomendados.length >= 2 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Target className="w-4 h-4 text-violet-400" />
+                  <span className="text-sm font-medium">Comparativo por Dimensão</span>
+                </div>
+                <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-4" data-testid="chart-radar">
+                  <ResponsiveContainer width="100%" height={340}>
+                    <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="72%">
+                      <PolarGrid stroke="#475569" />
+                      <PolarAngleAxis dataKey="dimension" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
+                      <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 10 }} tickCount={5} />
+                      <Tooltip content={<CustomRadarTooltip />} />
+                      {recomendados.map((m: any, i: number) => (
+                        <Radar
+                          key={m.fundo.id}
+                          name={m.fundo.nome}
+                          dataKey={m.fundo.nome}
+                          stroke={FUND_COLORS[i % FUND_COLORS.length]}
+                          fill={FUND_COLORS[i % FUND_COLORS.length]}
+                          fillOpacity={0.15}
+                          strokeWidth={2}
+                        />
+                      ))}
+                      <Legend
+                        wrapperStyle={{ fontSize: 11, color: '#94a3b8' }}
+                        iconType="circle"
+                        iconSize={8}
+                      />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {selectedFundo && (
+              <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-4 space-y-3" data-testid="detail-selected-fund">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Landmark className="w-4 h-4 text-cyan-400" />
+                    <span className="text-sm font-medium">{selectedFundo.fundo.nome}</span>
+                    <Badge className={cn("text-[10px]",
+                      selectedFundo.score >= 75 ? "bg-green-900/30 text-green-400 border-green-700" :
+                      selectedFundo.score >= 50 ? "bg-yellow-900/30 text-yellow-400 border-yellow-700" :
+                      "bg-orange-900/30 text-orange-400 border-orange-700"
+                    )}>
+                      {selectedFundo.score}% match
+                    </Badge>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedFundoId(null)} className="text-xs text-muted-foreground">
+                    Fechar
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-7 gap-1.5">
+                  {selectedBreakdown.map((dim: any) => (
+                    <div key={dim.dimension} className="text-center">
+                      <div className="relative h-20 bg-slate-900/60 rounded-md overflow-hidden border border-slate-700">
+                        <div
+                          className={cn("absolute bottom-0 w-full transition-all rounded-b-md",
+                            dim.percentual >= 75 ? "bg-green-500/60" :
+                            dim.percentual >= 50 ? "bg-yellow-500/60" :
+                            dim.percentual > 0 ? "bg-orange-500/60" : "bg-slate-700/40"
+                          )}
+                          style={{ height: `${dim.percentual}%` }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-xs font-bold text-white drop-shadow">{dim.pontos}/{dim.max}</span>
+                        </div>
+                      </div>
+                      <p className="text-[9px] text-muted-foreground mt-1 leading-tight">{dim.dimension}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {selectedFundo.reasons?.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-medium text-green-400 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Pontos Fortes ({selectedFundo.reasons.length})
+                      </p>
+                      {selectedFundo.reasons.map((r: string, i: number) => (
+                        <p key={i} className="text-[10px] text-muted-foreground pl-4">{r}</p>
+                      ))}
+                    </div>
+                  )}
+                  {selectedFundo.gaps?.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-medium text-amber-400 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> Pendências ({selectedFundo.gaps.length})
+                      </p>
+                      {selectedFundo.gaps.map((g: string, i: number) => (
+                        <p key={i} className="text-[10px] text-amber-300/70 pl-4">{g}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!selectedFundo && recomendados.length > 0 && (
+              <p className="text-[11px] text-muted-foreground text-center">Clique em uma barra do ranking para ver o detalhamento do fundo</p>
+            )}
+
+            {incompativeis.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Ban className="w-4 h-4 text-red-400" />
+                  <span className="text-sm font-medium">Fundos Eliminados ({incompativeis.length})</span>
+                </div>
+                <div className="space-y-1.5">
+                  {incompativeis.map((m: any) => (
+                    <div key={m.fundo.id} className="flex items-center gap-2 bg-red-950/10 border border-red-900/30 rounded-md px-3 py-2" data-testid={`graph-eliminado-${m.fundo.id}`}>
+                      <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                      <span className="text-xs font-medium flex-1">{m.fundo.nome}</span>
+                      <span className="text-[10px] text-red-400/70">{m.motivoEliminacao}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MatchingFundoCard({ m, onSelect, isPending }: { m: any; onSelect: (fundoId: number, score: number, reasons: string[]) => void; isPending: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const cond = m.fundo.condicoesComerciais || {};
+
+  return (
+    <div className="border rounded-lg p-3 space-y-2" data-testid={`n-matching-${m.fundo.id}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-sm font-medium truncate">{m.fundo.nome}</span>
+          {m.score >= 75 && <Badge className="text-[10px] bg-green-900/30 text-green-400 border border-green-700 shrink-0">Ideal</Badge>}
+        </div>
+        <Button
+          variant="outline" size="sm" className="shrink-0"
+          onClick={() => onSelect(m.fundo.id, m.score, m.reasons)}
+          disabled={isPending}
+          data-testid={`button-enviar-fundo-${m.fundo.id}`}
+        >
+          <Plus className="w-3 h-3 mr-1" /> Selecionar
+        </Button>
+      </div>
+
+      <ScoreBar score={m.score} />
+
+      {(cond.taxaJurosMin != null || cond.taxaJurosMax != null || cond.prazoRespostaDias != null) && (
+        <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
+          {(cond.taxaJurosMin != null || cond.taxaJurosMax != null) && (
+            <span className="flex items-center gap-1">
+              <Percent className="w-3 h-3" />
+              {cond.taxaJurosMin != null && cond.taxaJurosMax != null
+                ? `${cond.taxaJurosMin}% - ${cond.taxaJurosMax}% a.a.`
+                : cond.taxaJurosMin != null ? `a partir de ${cond.taxaJurosMin}% a.a.` : `até ${cond.taxaJurosMax}% a.a.`}
+            </span>
+          )}
+          {cond.prazoRespostaDias != null && (
+            <span className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              Resposta: {cond.prazoRespostaDias} dias
+            </span>
+          )}
+        </div>
+      )}
+
+      <button
+        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+        onClick={() => setExpanded(!expanded)}
+        data-testid={`button-expand-matching-${m.fundo.id}`}
+      >
+        {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        {expanded ? "Ocultar detalhes" : "Ver detalhes do matching"}
+      </button>
+
+      {expanded && (
+        <div className="space-y-2 pt-1">
+          {m.reasons && m.reasons.length > 0 && (
+            <div className="space-y-1">
+              {m.reasons.map((r: string, i: number) => (
+                <div key={i} className="flex items-start gap-1.5 text-[11px]" data-testid={`reason-${m.fundo.id}-${i}`}>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0 mt-0.5" />
+                  <span>{r}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {m.gaps && m.gaps.length > 0 && (
+            <div className="space-y-1">
+              {m.gaps.map((g: string, i: number) => (
+                <div key={i} className="flex items-start gap-1.5 text-[11px]" data-testid={`gap-${m.fundo.id}-${i}`}>
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                  <span className="text-amber-300/80">{g}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <FundoCriteriosCollapsible fundo={m.fundo} />
+        </div>
+      )}
     </div>
   );
 }
@@ -366,6 +912,8 @@ function DocumentChecklist({ operationId, finalidade }: { operationId: number; f
 function EnviosFundosSection({ operationId }: { operationId: number }) {
   const { toast } = useToast();
   const [motivoEscolha, setMotivoEscolha] = useState<Record<number, string>>({});
+  const [showIncompativeis, setShowIncompativeis] = useState(false);
+  const [showGraph, setShowGraph] = useState(false);
 
   const { data: envios = [], isLoading: enviosLoading } = useQuery<any[]>({
     queryKey: ["/api/norion/operations", operationId, "envios"],
@@ -387,7 +935,6 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
     enabled: !!operationId,
   });
 
-  // Etapa 1: Selecionar fundo (status: pronto_para_envio)
   const selecionarMutation = useMutation({
     mutationFn: async ({ fundoParceiroId, matchScore, matchReasons }: { fundoParceiroId: number; matchScore?: number; matchReasons?: string[] }) => {
       const res = await apiRequest("POST", `/api/norion/operations/${operationId}/envios`, {
@@ -403,7 +950,6 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
     onError: (err: any) => toast({ title: "Erro", description: err.message, variant: "destructive" }),
   });
 
-  // Etapa 2: Confirmar envio (pronto_para_envio → enviado)
   const confirmarEnvioMutation = useMutation({
     mutationFn: async ({ envioId, motivo }: { envioId: number; motivo?: string }) => {
       const res = await apiRequest("PATCH", `/api/norion/envios/${envioId}`, {
@@ -434,80 +980,115 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
   });
 
   const enviadosFundoIds = envios.map((e: any) => e.fundoParceiroId);
-  const sugestoes = matching.filter((m: any) => !enviadosFundoIds.includes(m.fundo.id));
+  const allSugestoes = matching.filter((m: any) => !enviadosFundoIds.includes(m.fundo.id));
+  const sugestoes = allSugestoes.filter((m: any) => !m.eliminado);
+  const incompativeis = allSugestoes.filter((m: any) => m.eliminado);
 
-  // Separar por status
   const enviosProntos = envios.filter((e: any) => e.status === "pronto_para_envio");
   const enviosAtivos = envios.filter((e: any) => e.status !== "pronto_para_envio");
 
   const statusLabel = (s: string) => ({ pronto_para_envio: "Pronto para Enviar", enviado: "Enviado", em_analise: "Em Análise", aprovado: "Aprovado", recusado: "Recusado" }[s] || s);
   const statusColor = (s: string) => ({ pronto_para_envio: "border-yellow-400 text-yellow-400", enviado: "border-blue-400 text-blue-400", em_analise: "border-amber-400 text-amber-400", aprovado: "border-green-400 text-green-400", recusado: "border-red-400 text-red-400" }[s] || "border-slate-400 text-slate-400");
 
+  const handleSelectFundo = (fundoId: number, score: number, reasons: string[]) => {
+    const topReasons = reasons.slice(0, 3).join("; ");
+    setMotivoEscolha(prev => ({ ...prev, [`pending_${fundoId}`]: topReasons }));
+    selecionarMutation.mutate({ fundoParceiroId: fundoId, matchScore: score, matchReasons: reasons });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Handshake className="w-4 h-4 text-muted-foreground" />
-        <span className="text-sm font-medium">Envio para Fundos</span>
+        <span className="text-sm font-medium">Sugestões de Matching</span>
         {enviosProntos.length > 0 && (
           <Badge className="text-[10px] bg-yellow-900/30 text-yellow-400 border border-yellow-700">
             {enviosProntos.length} aguardando envio
           </Badge>
         )}
+        {matching.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto text-xs gap-1.5 border-cyan-700/50 text-cyan-400 hover:bg-cyan-900/20"
+            onClick={() => setShowGraph(true)}
+            data-testid="button-open-matching-graph"
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            Ver Gráfico
+          </Button>
+        )}
       </div>
+      <MatchingGraphDialog matching={matching} open={showGraph} onOpenChange={setShowGraph} />
 
-      {/* Fundos prontos para envio - destaque especial */}
       {enviosProntos.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-yellow-400">Aguardando Confirmação de Envio</p>
-          {enviosProntos.map((envio: any) => (
-            <div key={envio.id} className="border border-yellow-700/50 rounded-lg p-3 space-y-2 bg-yellow-900/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{envio.fundoParceiro?.nome || "Fundo"}</span>
-                  {envio.matchScore && (
-                    <Badge variant="outline" className="text-[10px] border-green-400 text-green-400">
-                      <Star className="w-2.5 h-2.5 mr-0.5" />{envio.matchScore}% match
-                    </Badge>
-                  )}
+          {enviosProntos.map((envio: any) => {
+            const matchData = matching.find((m: any) => m.fundo.id === envio.fundoParceiroId);
+            const topReasons = (envio.matchReasons || matchData?.reasons || []).slice(0, 3).join("; ");
+            return (
+              <div key={envio.id} className="border border-yellow-700/50 rounded-lg p-3 space-y-2 bg-yellow-900/10" data-testid={`n-envio-pronto-${envio.id}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{envio.fundoParceiro?.nome || "Fundo"}</span>
+                    {envio.matchScore != null && (
+                      <Badge variant="outline" className={cn("text-[10px]",
+                        envio.matchScore >= 75 ? "border-green-400 text-green-400" :
+                        envio.matchScore >= 50 ? "border-yellow-400 text-yellow-400" :
+                        "border-orange-400 text-orange-400"
+                      )}>
+                        <Star className="w-2.5 h-2.5 mr-0.5" />{envio.matchScore}% match
+                      </Badge>
+                    )}
+                  </div>
+                  <Badge variant="outline" className={cn("text-xs", statusColor(envio.status))}>
+                    {statusLabel(envio.status)}
+                  </Badge>
                 </div>
-                <Badge variant="outline" className={cn("text-xs", statusColor(envio.status))}>
-                  {statusLabel(envio.status)}
-                </Badge>
+                {envio.matchReasons?.length > 0 && (
+                  <div className="space-y-0.5">
+                    {envio.matchReasons.slice(0, 3).map((r: string, i: number) => (
+                      <div key={i} className="flex items-center gap-1 text-[10px]">
+                        <CheckCircle2 className="w-3 h-3 text-green-400 shrink-0" />
+                        <span className="text-muted-foreground">{r}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Input
+                    className="text-xs flex-1"
+                    placeholder="Motivo da escolha (opcional)..."
+                    value={motivoEscolha[envio.id] ?? (envio.motivoEscolha || topReasons)}
+                    onChange={(e) => setMotivoEscolha(prev => ({ ...prev, [envio.id]: e.target.value }))}
+                    data-testid={`input-motivo-${envio.id}`}
+                  />
+                  <Button
+                    size="sm" className="shrink-0"
+                    onClick={() => confirmarEnvioMutation.mutate({ envioId: envio.id, motivo: motivoEscolha[envio.id] || topReasons })}
+                    disabled={confirmarEnvioMutation.isPending}
+                    data-testid={`button-confirmar-envio-${envio.id}`}
+                  >
+                    <Send className="w-3 h-3 mr-1" /> Confirmar Envio
+                  </Button>
+                </div>
               </div>
-              {envio.matchReasons?.length > 0 && (
-                <p className="text-[10px] text-muted-foreground">{envio.matchReasons.join(" · ")}</p>
-              )}
-              <div className="flex gap-2">
-                <Input
-                  className="h-7 text-xs flex-1"
-                  placeholder="Motivo da escolha (opcional)..."
-                  value={motivoEscolha[envio.id] ?? (envio.motivoEscolha || "")}
-                  onChange={(e) => setMotivoEscolha(prev => ({ ...prev, [envio.id]: e.target.value }))}
-                />
-                <Button
-                  size="sm" className="h-7 text-xs bg-blue-600 hover:bg-blue-700 shrink-0"
-                  onClick={() => confirmarEnvioMutation.mutate({ envioId: envio.id, motivo: motivoEscolha[envio.id] })}
-                  disabled={confirmarEnvioMutation.isPending}
-                >
-                  <Send className="w-3 h-3 mr-1" /> Confirmar Envio
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* Envios já enviados/em andamento */}
       {enviosAtivos.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground font-medium">Envios em Andamento</p>
           {enviosAtivos.map((envio: any) => (
             <div key={envio.id} className="border rounded-lg p-2.5 space-y-2" data-testid={`n-envio-${envio.id}`}>
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium">{envio.fundoParceiro?.nome || "Fundo"}</span>
-                  {envio.matchScore && (
-                    <Badge variant="outline" className="ml-2 text-[10px] border-slate-500 text-slate-400">
+                  {envio.matchScore != null && (
+                    <Badge variant="outline" className="text-[10px] border-slate-500 text-slate-400">
                       {envio.matchScore}% match
                     </Badge>
                   )}
@@ -524,7 +1105,7 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
               )}
               {envio.status !== "aprovado" && envio.status !== "recusado" && (
                 <Select value="" onValueChange={(val) => updateEnvioMutation.mutate({ envioId: envio.id, data: { status: val } })}>
-                  <SelectTrigger className="h-7 text-xs w-auto">
+                  <SelectTrigger className="text-xs w-auto">
                     <SelectValue placeholder="Atualizar status..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -538,14 +1119,14 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label className="text-[10px] text-muted-foreground">Valor Aprovado</Label>
-                    <Input type="number" className="h-7 text-xs" placeholder="R$ 0"
+                    <Input type="number" className="text-xs" placeholder="R$ 0"
                       defaultValue={envio.valorAprovado || ""}
                       onBlur={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) updateEnvioMutation.mutate({ envioId: envio.id, data: { valorAprovado: v, status: "aprovado" } }); }}
                     />
                   </div>
                   <div>
                     <Label className="text-[10px] text-muted-foreground">Taxa Juros %</Label>
-                    <Input type="number" className="h-7 text-xs" placeholder="0"
+                    <Input type="number" className="text-xs" placeholder="0"
                       defaultValue={envio.taxaJuros || ""}
                       onBlur={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) updateEnvioMutation.mutate({ envioId: envio.id, data: { taxaJuros: v } }); }}
                     />
@@ -553,7 +1134,7 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
                 </div>
               )}
               {envio.status === "recusado" && (
-                <Input className="h-7 text-xs" placeholder="Motivo da recusa..."
+                <Input className="text-xs" placeholder="Motivo da recusa..."
                   defaultValue={envio.motivoRecusa || ""}
                   onBlur={(e) => { if (e.target.value) updateEnvioMutation.mutate({ envioId: envio.id, data: { motivoRecusa: e.target.value } }); }}
                 />
@@ -563,40 +1144,48 @@ function EnviosFundosSection({ operationId }: { operationId: number }) {
         </div>
       )}
 
-      {/* Fundos sugeridos pelo matching */}
       {sugestoes.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground font-medium">Fundos Recomendados</p>
-          {sugestoes.slice(0, 5).map((m: any) => (
-            <div key={m.fundo.id} className="flex items-center justify-between border rounded-lg p-2" data-testid={`n-matching-${m.fundo.id}`}>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium truncate">{m.fundo.nome}</span>
-                  <Badge variant="outline" className={cn("text-[10px] shrink-0",
-                    m.score >= 80 ? "border-green-400 text-green-400 bg-green-900/30" :
-                    m.score >= 50 ? "border-amber-400 text-amber-400 bg-amber-900/30" :
-                    "border-slate-600 text-slate-400"
-                  )}>
-                    <Star className="w-2.5 h-2.5 mr-0.5" />{m.score}%
-                  </Badge>
-                  {m.score >= 80 && <Badge className="text-[10px] bg-green-900/30 text-green-400 border border-green-700">Ideal</Badge>}
-                </div>
-                <p className="text-[10px] text-muted-foreground truncate">{m.reasons?.join(" · ")}</p>
-              </div>
-              <Button
-                variant="outline" size="sm" className="h-7 text-xs shrink-0 ml-2"
-                onClick={() => selecionarMutation.mutate({ fundoParceiroId: m.fundo.id, matchScore: m.score, matchReasons: m.reasons })}
-                disabled={selecionarMutation.isPending}
-                data-testid={`button-enviar-fundo-${m.fundo.id}`}
-              >
-                <Plus className="w-3 h-3 mr-1" /> Selecionar
-              </Button>
-            </div>
+          <p className="text-xs text-muted-foreground font-medium">Fundos Recomendados ({sugestoes.length})</p>
+          {sugestoes.map((m: any) => (
+            <MatchingFundoCard
+              key={m.fundo.id}
+              m={m}
+              onSelect={handleSelectFundo}
+              isPending={selecionarMutation.isPending}
+            />
           ))}
         </div>
       )}
 
-      {!enviosLoading && !matchingLoading && envios.length === 0 && sugestoes.length === 0 && (
+      {incompativeis.length > 0 && (
+        <div className="space-y-2">
+          <button
+            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+            onClick={() => setShowIncompativeis(!showIncompativeis)}
+            data-testid="button-toggle-incompativeis"
+          >
+            <Ban className="w-3.5 h-3.5 text-red-400" />
+            <span className="font-medium">Incompatíveis ({incompativeis.length})</span>
+            {showIncompativeis ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+          </button>
+          {showIncompativeis && (
+            <div className="space-y-1.5">
+              {incompativeis.map((m: any) => (
+                <div key={m.fundo.id} className="border border-red-900/30 rounded-lg p-2.5 bg-red-950/10" data-testid={`n-incompativel-${m.fundo.id}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                    <span className="text-sm font-medium">{m.fundo.nome}</span>
+                  </div>
+                  <p className="text-[11px] text-red-400/80 ml-5">{m.motivoEliminacao}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!enviosLoading && !matchingLoading && envios.length === 0 && sugestoes.length === 0 && incompativeis.length === 0 && (
         <p className="text-xs text-muted-foreground text-center py-2">Cadastre fundos parceiros para ver sugestões</p>
       )}
     </div>
@@ -971,10 +1560,44 @@ function PortalAccessSection({ operationId, companyTaxId, companyName }: { opera
   );
 }
 
+const FORM_FIELD_OPTIONS = [
+  { key: "nomeCompleto", label: "Nome Completo", step: "pessoal" },
+  { key: "cpf", label: "CPF", step: "pessoal" },
+  { key: "rg", label: "RG", step: "pessoal" },
+  { key: "dataNascimento", label: "Data de Nascimento", step: "pessoal" },
+  { key: "estadoCivil", label: "Estado Civil", step: "pessoal" },
+  { key: "email", label: "E-mail", step: "pessoal" },
+  { key: "celular", label: "Celular", step: "pessoal" },
+  { key: "cep", label: "CEP", step: "endereco" },
+  { key: "logradouro", label: "Endereço", step: "endereco" },
+  { key: "numero", label: "Número", step: "endereco" },
+  { key: "complemento", label: "Complemento", step: "endereco" },
+  { key: "bairro", label: "Bairro", step: "endereco" },
+  { key: "cidade", label: "Cidade/UF", step: "endereco" },
+  { key: "profissao", label: "Profissão", step: "profissional" },
+  { key: "empresaTrabalho", label: "Empresa/Trabalho", step: "profissional" },
+  { key: "cnpjEmpresa", label: "CNPJ da Empresa", step: "profissional" },
+  { key: "rendaMensal", label: "Renda Mensal", step: "profissional" },
+  { key: "tempoEmprego", label: "Tempo de Emprego", step: "profissional" },
+  { key: "outrasRendas", label: "Outras Rendas", step: "profissional" },
+  { key: "valorSolicitado", label: "Valor Solicitado", step: "credito" },
+  { key: "finalidadeCredito", label: "Finalidade do Crédito", step: "credito" },
+  { key: "prazoDesejado", label: "Prazo Desejado", step: "credito" },
+  { key: "tipoGarantia", label: "Tipo de Garantia", step: "credito" },
+  { key: "descricaoGarantia", label: "Descrição da Garantia", step: "credito" },
+  { key: "valorGarantia", label: "Valor da Garantia", step: "credito" },
+  { key: "possuiImovel", label: "Possui Imóvel", step: "patrimonio" },
+  { key: "valorImovel", label: "Valor do Imóvel", step: "patrimonio" },
+  { key: "possuiVeiculo", label: "Possui Veículo", step: "patrimonio" },
+  { key: "valorVeiculo", label: "Valor do Veículo", step: "patrimonio" },
+  { key: "outrosPatrimonios", label: "Outros Patrimônios", step: "patrimonio" },
+];
+
 function FormularioClienteSection({ operationId }: { operationId: number }) {
   const { toast } = useToast();
   const [observacao, setObservacao] = useState("");
   const [showRevisao, setShowRevisao] = useState(false);
+  const [selectedCampos, setSelectedCampos] = useState<string[]>([]);
 
   const { data: formularios = [] } = useQuery({
     queryKey: ["/api/norion/formularios-pendentes"],
@@ -1003,13 +1626,16 @@ function FormularioClienteSection({ operationId }: { operationId: number }) {
 
   const revisarMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("PATCH", `/api/norion/formulario/${formulario.id}/revisar`, { observacao });
+      const payload: any = { observacao };
+      if (selectedCampos.length > 0) payload.camposRevisao = selectedCampos;
+      const res = await apiRequest("PATCH", `/api/norion/formulario/${formulario.id}/revisar`, payload);
       return res.json();
     },
     onSuccess: () => {
       toast({ title: "Revisão solicitada" });
       setShowRevisao(false);
       setObservacao("");
+      setSelectedCampos([]);
       queryClient.invalidateQueries({ queryKey: ["/api/norion/formularios-pendentes"] });
     },
   });
@@ -1100,8 +1726,24 @@ function FormularioClienteSection({ operationId }: { operationId: number }) {
       )}
 
       {showRevisao && (
-        <div className="space-y-2 p-3 border rounded-lg bg-amber-900/20">
-          <Label className="text-xs">Motivo da revisão</Label>
+        <div className="space-y-3 p-3 border rounded-lg bg-amber-900/20">
+          <Label className="text-xs font-medium">Campos que precisam de correção (opcional)</Label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {FORM_FIELD_OPTIONS.map((field) => (
+              <label key={field.key} className="flex items-center gap-1.5 text-xs cursor-pointer hover:text-amber-300">
+                <Checkbox
+                  checked={selectedCampos.includes(field.key)}
+                  onCheckedChange={(checked) => {
+                    setSelectedCampos(prev => checked ? [...prev, field.key] : prev.filter(k => k !== field.key));
+                  }}
+                  className="h-3.5 w-3.5"
+                  data-testid={`checkbox-campo-${field.key}`}
+                />
+                <span>{field.label}</span>
+              </label>
+            ))}
+          </div>
+          <Label className="text-xs font-medium">Motivo da revisão *</Label>
           <Textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} placeholder="Descreva o que precisa ser corrigido..." rows={2} className="text-xs" data-testid="input-observacao-revisao" />
           <Button size="sm" className="text-xs" onClick={() => revisarMutation.mutate()} disabled={!observacao.trim() || revisarMutation.isPending} data-testid="button-enviar-revisao">
             Enviar Solicitação de Revisão
@@ -1113,6 +1755,14 @@ function FormularioClienteSection({ operationId }: { operationId: number }) {
         <div className="p-2 bg-amber-900/20 rounded border border-amber-800 text-xs">
           <p className="font-medium text-amber-400">Revisão solicitada:</p>
           <p className="text-amber-400 mt-0.5">{formulario.observacaoRevisao}</p>
+          {formulario.camposRevisao && (formulario.camposRevisao as string[]).length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {(formulario.camposRevisao as string[]).map((campo: string) => {
+                const fieldDef = FORM_FIELD_OPTIONS.find(f => f.key === campo);
+                return <Badge key={campo} variant="outline" className="text-[10px] border-amber-700 text-amber-400">{fieldDef?.label || campo}</Badge>;
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

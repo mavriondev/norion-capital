@@ -528,6 +528,36 @@ export default function PortalClienteFormulario() {
 
   const isReadOnly = formData.status === "enviado" || formData.status === "aprovado";
   const isRevisao = formData.status === "em_revisao";
+  const camposRevisao: string[] = (isRevisao && Array.isArray(formData.camposRevisao) && formData.camposRevisao.length > 0) ? formData.camposRevisao as string[] : [];
+  const hasFieldRestriction = camposRevisao.length > 0;
+
+  const isFieldDisabled = (fieldKey: string) => {
+    if (isReadOnly) return true;
+    if (isRevisao && hasFieldRestriction) return !camposRevisao.includes(fieldKey);
+    return false;
+  };
+
+  const isFieldHighlighted = (fieldKey: string) => {
+    return isRevisao && hasFieldRestriction && camposRevisao.includes(fieldKey);
+  };
+
+  const FIELD_STEP_MAP: Record<string, string> = {
+    nomeCompleto: "pessoal", cpf: "pessoal", email: "pessoal", celular: "pessoal",
+    rg: "pessoal", dataNascimento: "pessoal", estadoCivil: "pessoal", naturalidade: "pessoal",
+    nomeMae: "pessoal", telefone: "pessoal",
+    cep: "endereco", logradouro: "endereco", numero: "endereco", complemento: "endereco",
+    bairro: "endereco", cidade: "endereco", uf: "endereco",
+    profissao: "profissional", empresaTrabalho: "profissional", cnpjEmpresa: "profissional",
+    rendaMensal: "profissional", tempoEmprego: "profissional", outrasRendas: "profissional",
+    valorSolicitado: "credito", finalidadeCredito: "credito", prazoDesejado: "credito",
+    tipoGarantia: "credito", descricaoGarantia: "credito", valorGarantia: "credito",
+    possuiImovel: "patrimonio", valorImovel: "patrimonio", possuiVeiculo: "patrimonio",
+    valorVeiculo: "patrimonio", outrosPatrimonios: "patrimonio",
+  };
+
+  const stepsWithRevision = hasFieldRestriction
+    ? [...new Set(camposRevisao.map(f => FIELD_STEP_MAP[f]).filter(Boolean))]
+    : [];
 
   if (!portalClientId || !portalToken) return null;
 
@@ -576,11 +606,35 @@ export default function PortalClienteFormulario() {
         {isRevisao && formData.observacaoRevisao && (
           <Card className="border-amber-500/40 bg-amber-950/30" data-testid="banner-revisao">
             <CardContent className="p-4 flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+              <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-amber-300">Revisão Solicitada</p>
                 <p className="text-sm text-amber-400 mt-1">{formData.observacaoRevisao}</p>
-                <p className="text-xs text-amber-500 mt-2">Corrija os itens indicados e envie novamente.</p>
+                {hasFieldRestriction && (
+                  <div className="mt-2">
+                    <p className="text-xs text-amber-500 font-medium mb-1">Campos para corrigir:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {camposRevisao.map((campo) => {
+                        const FIELD_LABELS: Record<string, string> = {
+                          nomeCompleto: "Nome Completo", cpf: "CPF", email: "E-mail", celular: "Celular",
+                          cep: "CEP", logradouro: "Endereço", cidade: "Cidade/UF",
+                          profissao: "Profissão", empresaTrabalho: "Empresa/Trabalho", rendaMensal: "Renda Mensal",
+                          valorSolicitado: "Valor Solicitado", finalidadeCredito: "Finalidade", prazoDesejado: "Prazo",
+                          tipoGarantia: "Garantia", valorImovel: "Valor Imóvel", valorVeiculo: "Valor Veículo",
+                        };
+                        return (
+                          <span key={campo} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-900/50 border border-amber-700/50 text-[11px] text-amber-300">
+                            <AlertTriangle className="w-2.5 h-2.5" />
+                            {FIELD_LABELS[campo] || campo}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <p className="text-xs text-amber-500 mt-2">
+                  {hasFieldRestriction ? "Corrija os campos destacados em amarelo e envie novamente." : "Corrija os itens indicados e envie novamente."}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -669,6 +723,7 @@ export default function PortalClienteFormulario() {
               const isActive = stepNum === currentStep;
               const isDone = stepNum < currentStep;
               const isPrefilled = isStepPrefilled(stepNum) && !editingSteps[stepNum];
+              const hasRevisionFields = stepsWithRevision.includes(step.key);
               return (
                 <button
                   key={step.key}
@@ -680,13 +735,14 @@ export default function PortalClienteFormulario() {
                   }}
                   className={cn(
                     "flex-1 flex flex-col items-center gap-0.5 py-2 rounded-lg text-[10px] transition-all",
-                    isActive && "bg-amber-900/30 text-amber-400 font-medium",
-                    !isActive && (isDone || isPrefilled) && "text-green-400",
-                    !isActive && !isDone && !isPrefilled && "text-slate-500",
+                    hasRevisionFields && "bg-amber-900/40 text-amber-400 border border-amber-700/50 font-medium",
+                    isActive && !hasRevisionFields && "bg-amber-900/30 text-amber-400 font-medium",
+                    !isActive && !hasRevisionFields && (isDone || isPrefilled) && "text-green-400",
+                    !isActive && !hasRevisionFields && !isDone && !isPrefilled && "text-slate-500",
                   )}
                   data-testid={`step-button-${step.key}`}
                 >
-                  {isDone || isPrefilled ? <Check className="w-3.5 h-3.5" /> : <StepIcon className="w-3.5 h-3.5" />}
+                  {hasRevisionFields ? <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> : isDone || isPrefilled ? <Check className="w-3.5 h-3.5" /> : <StepIcon className="w-3.5 h-3.5" />}
                   <span className="hidden sm:block">{step.label}</span>
                 </button>
               );
@@ -702,40 +758,40 @@ export default function PortalClienteFormulario() {
 
             {currentStep === 1 && (
               <div className="space-y-3" data-testid="step-pessoal">
-                <FieldGroup label="Nome Completo *" error={validationErrors.nomeCompleto}>
-                  <Input value={formData.nomeCompleto || ""} onChange={(e) => setField("nomeCompleto", e.target.value)} placeholder="Nome completo" disabled={isReadOnly} data-testid="input-nome" />
+                <FieldGroup label="Nome Completo *" error={validationErrors.nomeCompleto} highlighted={isFieldHighlighted("nomeCompleto")}>
+                  <Input value={formData.nomeCompleto || ""} onChange={(e) => setField("nomeCompleto", e.target.value)} placeholder="Nome completo" disabled={isFieldDisabled("nomeCompleto")} data-testid="input-nome" />
                 </FieldGroup>
-                <FieldGroup label="CPF *" error={validationErrors.cpf}>
-                  <Input value={formatTaxId(formData.cpf || "")} onChange={(e) => setField("cpf", e.target.value.replace(/\D/g, ""))} placeholder="000.000.000-00" maxLength={14} disabled={isReadOnly} data-testid="input-cpf" />
+                <FieldGroup label="CPF *" error={validationErrors.cpf} highlighted={isFieldHighlighted("cpf")}>
+                  <Input value={formatTaxId(formData.cpf || "")} onChange={(e) => setField("cpf", e.target.value.replace(/\D/g, ""))} placeholder="000.000.000-00" maxLength={14} disabled={isFieldDisabled("cpf")} data-testid="input-cpf" />
                 </FieldGroup>
-                <FieldGroup label="RG">
-                  <Input value={formData.rg || ""} onChange={(e) => setField("rg", e.target.value)} placeholder="Número do RG" disabled={isReadOnly} data-testid="input-rg" />
+                <FieldGroup label="RG" highlighted={isFieldHighlighted("rg")}>
+                  <Input value={formData.rg || ""} onChange={(e) => setField("rg", e.target.value)} placeholder="Número do RG" disabled={isFieldDisabled("rg")} data-testid="input-rg" />
                 </FieldGroup>
-                <FieldGroup label="Data de Nascimento">
-                  <Input type="date" value={formData.dataNascimento || ""} onChange={(e) => setField("dataNascimento", e.target.value)} disabled={isReadOnly} data-testid="input-nascimento" />
+                <FieldGroup label="Data de Nascimento" highlighted={isFieldHighlighted("dataNascimento")}>
+                  <Input type="date" value={formData.dataNascimento || ""} onChange={(e) => setField("dataNascimento", e.target.value)} disabled={isFieldDisabled("dataNascimento")} data-testid="input-nascimento" />
                 </FieldGroup>
-                <FieldGroup label="Estado Civil">
-                  <Select value={formData.estadoCivil || ""} onValueChange={(v) => setField("estadoCivil", v)} disabled={isReadOnly}>
+                <FieldGroup label="Estado Civil" highlighted={isFieldHighlighted("estadoCivil")}>
+                  <Select value={formData.estadoCivil || ""} onValueChange={(v) => setField("estadoCivil", v)} disabled={isFieldDisabled("estadoCivil")}>
                     <SelectTrigger data-testid="select-estado-civil"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {ESTADOS_CIVIS.map((ec) => <SelectItem key={ec} value={ec}>{ec}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </FieldGroup>
-                <FieldGroup label="Naturalidade">
-                  <Input value={formData.naturalidade || ""} onChange={(e) => setField("naturalidade", e.target.value)} placeholder="Cidade/UF de nascimento" disabled={isReadOnly} data-testid="input-naturalidade" />
+                <FieldGroup label="Naturalidade" highlighted={isFieldHighlighted("naturalidade")}>
+                  <Input value={formData.naturalidade || ""} onChange={(e) => setField("naturalidade", e.target.value)} placeholder="Cidade/UF de nascimento" disabled={isFieldDisabled("naturalidade")} data-testid="input-naturalidade" />
                 </FieldGroup>
-                <FieldGroup label="Nome da Mãe">
-                  <Input value={formData.nomeMae || ""} onChange={(e) => setField("nomeMae", e.target.value)} placeholder="Nome completo da mãe" disabled={isReadOnly} data-testid="input-nome-mae" />
+                <FieldGroup label="Nome da Mãe" highlighted={isFieldHighlighted("nomeMae")}>
+                  <Input value={formData.nomeMae || ""} onChange={(e) => setField("nomeMae", e.target.value)} placeholder="Nome completo da mãe" disabled={isFieldDisabled("nomeMae")} data-testid="input-nome-mae" />
                 </FieldGroup>
-                <FieldGroup label="E-mail *" error={validationErrors.email}>
-                  <Input type="email" value={formData.email || ""} onChange={(e) => setField("email", e.target.value)} placeholder="email@exemplo.com" disabled={isReadOnly} data-testid="input-email" />
+                <FieldGroup label="E-mail *" error={validationErrors.email} highlighted={isFieldHighlighted("email")}>
+                  <Input type="email" value={formData.email || ""} onChange={(e) => setField("email", e.target.value)} placeholder="email@exemplo.com" disabled={isFieldDisabled("email")} data-testid="input-email" />
                 </FieldGroup>
-                <FieldGroup label="Telefone">
-                  <Input value={formatPhone(formData.telefone || "")} onChange={(e) => setField("telefone", e.target.value.replace(/\D/g, ""))} placeholder="(00) 0000-0000" maxLength={15} disabled={isReadOnly} data-testid="input-telefone" />
+                <FieldGroup label="Telefone" highlighted={isFieldHighlighted("telefone")}>
+                  <Input value={formatPhone(formData.telefone || "")} onChange={(e) => setField("telefone", e.target.value.replace(/\D/g, ""))} placeholder="(00) 0000-0000" maxLength={15} disabled={isFieldDisabled("telefone")} data-testid="input-telefone" />
                 </FieldGroup>
-                <FieldGroup label="Celular *" error={validationErrors.celular}>
-                  <Input value={formatPhone(formData.celular || "")} onChange={(e) => setField("celular", e.target.value.replace(/\D/g, ""))} placeholder="(00) 00000-0000" maxLength={15} disabled={isReadOnly} data-testid="input-celular" />
+                <FieldGroup label="Celular *" error={validationErrors.celular} highlighted={isFieldHighlighted("celular")}>
+                  <Input value={formatPhone(formData.celular || "")} onChange={(e) => setField("celular", e.target.value.replace(/\D/g, ""))} placeholder="(00) 00000-0000" maxLength={15} disabled={isFieldDisabled("celular")} data-testid="input-celular" />
                 </FieldGroup>
               </div>
             )}
@@ -770,36 +826,36 @@ export default function PortalClienteFormulario() {
                     <Check className="w-3 h-3 mr-1" /> Concluir edição
                   </Button>
                 )}
-                <FieldGroup label="CEP *" error={validationErrors.cep}>
+                <FieldGroup label="CEP *" error={validationErrors.cep} highlighted={isFieldHighlighted("cep")}>
                   <div className="flex gap-2">
-                    <Input value={formatCep(formData.cep || "")} onChange={(e) => setField("cep", e.target.value.replace(/\D/g, ""))} onBlur={lookupCep} placeholder="00000-000" maxLength={9} disabled={isReadOnly} data-testid="input-cep" />
+                    <Input value={formatCep(formData.cep || "")} onChange={(e) => setField("cep", e.target.value.replace(/\D/g, ""))} onBlur={lookupCep} placeholder="00000-000" maxLength={9} disabled={isFieldDisabled("cep")} data-testid="input-cep" />
                     {cepLoading && <Loader2 className="w-4 h-4 animate-spin self-center text-amber-500" />}
                   </div>
                 </FieldGroup>
-                <FieldGroup label="Logradouro *" error={validationErrors.logradouro}>
-                  <Input value={formData.logradouro || ""} onChange={(e) => setField("logradouro", e.target.value)} placeholder="Rua, Avenida..." disabled={isReadOnly} data-testid="input-logradouro" />
+                <FieldGroup label="Logradouro *" error={validationErrors.logradouro} highlighted={isFieldHighlighted("logradouro")}>
+                  <Input value={formData.logradouro || ""} onChange={(e) => setField("logradouro", e.target.value)} placeholder="Rua, Avenida..." disabled={isFieldDisabled("logradouro")} data-testid="input-logradouro" />
                 </FieldGroup>
                 <div className="grid grid-cols-3 gap-3">
-                  <FieldGroup label="Número *">
-                    <Input value={formData.numero || ""} onChange={(e) => setField("numero", e.target.value)} placeholder="Nº" disabled={isReadOnly} data-testid="input-numero" />
+                  <FieldGroup label="Número *" highlighted={isFieldHighlighted("numero")}>
+                    <Input value={formData.numero || ""} onChange={(e) => setField("numero", e.target.value)} placeholder="Nº" disabled={isFieldDisabled("numero")} data-testid="input-numero" />
                   </FieldGroup>
                   <div className="col-span-2">
-                    <FieldGroup label="Complemento">
-                      <Input value={formData.complemento || ""} onChange={(e) => setField("complemento", e.target.value)} placeholder="Apto, Bloco..." disabled={isReadOnly} data-testid="input-complemento" />
+                    <FieldGroup label="Complemento" highlighted={isFieldHighlighted("complemento")}>
+                      <Input value={formData.complemento || ""} onChange={(e) => setField("complemento", e.target.value)} placeholder="Apto, Bloco..." disabled={isFieldDisabled("complemento")} data-testid="input-complemento" />
                     </FieldGroup>
                   </div>
                 </div>
-                <FieldGroup label="Bairro *">
-                  <Input value={formData.bairro || ""} onChange={(e) => setField("bairro", e.target.value)} placeholder="Bairro" disabled={isReadOnly} data-testid="input-bairro" />
+                <FieldGroup label="Bairro *" highlighted={isFieldHighlighted("bairro")}>
+                  <Input value={formData.bairro || ""} onChange={(e) => setField("bairro", e.target.value)} placeholder="Bairro" disabled={isFieldDisabled("bairro")} data-testid="input-bairro" />
                 </FieldGroup>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="col-span-2">
-                    <FieldGroup label="Cidade *" error={validationErrors.cidade}>
-                      <Input value={formData.cidade || ""} onChange={(e) => setField("cidade", e.target.value)} placeholder="Cidade" disabled={isReadOnly} data-testid="input-cidade" />
+                    <FieldGroup label="Cidade *" error={validationErrors.cidade} highlighted={isFieldHighlighted("cidade")}>
+                      <Input value={formData.cidade || ""} onChange={(e) => setField("cidade", e.target.value)} placeholder="Cidade" disabled={isFieldDisabled("cidade")} data-testid="input-cidade" />
                     </FieldGroup>
                   </div>
-                  <FieldGroup label="UF *" error={validationErrors.uf}>
-                    <Input value={formData.uf || ""} onChange={(e) => setField("uf", e.target.value.toUpperCase())} placeholder="UF" maxLength={2} disabled={isReadOnly} data-testid="input-uf" />
+                  <FieldGroup label="UF *" error={validationErrors.uf} highlighted={isFieldHighlighted("uf")}>
+                    <Input value={formData.uf || ""} onChange={(e) => setField("uf", e.target.value.toUpperCase())} placeholder="UF" maxLength={2} disabled={isFieldDisabled("uf")} data-testid="input-uf" />
                   </FieldGroup>
                 </div>
               </div>
@@ -828,14 +884,14 @@ export default function PortalClienteFormulario() {
                       ))}
                     </div>
                   </div>
-                  <FieldGroup label="Renda Mensal (R$) *" error={validationErrors.rendaMensal}>
-                    <CurrencyInput value={formData.rendaMensal} onChange={(v) => setField("rendaMensal", v)} disabled={isReadOnly} data-testid="input-renda" />
+                  <FieldGroup label="Renda Mensal (R$) *" error={validationErrors.rendaMensal} highlighted={isFieldHighlighted("rendaMensal")}>
+                    <CurrencyInput value={formData.rendaMensal} onChange={(v) => setField("rendaMensal", v)} disabled={isFieldDisabled("rendaMensal")} data-testid="input-renda" />
                   </FieldGroup>
-                  <FieldGroup label="Tempo de Emprego">
-                    <Input value={formData.tempoEmprego || ""} onChange={(e) => setField("tempoEmprego", e.target.value)} placeholder="Ex: 2 anos e 6 meses" disabled={isReadOnly} data-testid="input-tempo-emprego" />
+                  <FieldGroup label="Tempo de Emprego" highlighted={isFieldHighlighted("tempoEmprego")}>
+                    <Input value={formData.tempoEmprego || ""} onChange={(e) => setField("tempoEmprego", e.target.value)} placeholder="Ex: 2 anos e 6 meses" disabled={isFieldDisabled("tempoEmprego")} data-testid="input-tempo-emprego" />
                   </FieldGroup>
-                  <FieldGroup label="Outras Rendas">
-                    <Textarea value={formData.outrasRendas || ""} onChange={(e) => setField("outrasRendas", e.target.value)} placeholder="Descreva outras fontes de renda, se houver" rows={2} disabled={isReadOnly} data-testid="input-outras-rendas" />
+                  <FieldGroup label="Outras Rendas" highlighted={isFieldHighlighted("outrasRendas")}>
+                    <Textarea value={formData.outrasRendas || ""} onChange={(e) => setField("outrasRendas", e.target.value)} placeholder="Descreva outras fontes de renda, se houver" rows={2} disabled={isFieldDisabled("outrasRendas")} data-testid="input-outras-rendas" />
                   </FieldGroup>
                 </div>
               ) : (
@@ -845,15 +901,15 @@ export default function PortalClienteFormulario() {
                     <Check className="w-3 h-3 mr-1" /> Concluir edição
                   </Button>
                 )}
-                <FieldGroup label="Profissão *" error={validationErrors.profissao}>
-                  <Input value={formData.profissao || ""} onChange={(e) => setField("profissao", e.target.value)} placeholder="Sua profissão" disabled={isReadOnly} data-testid="input-profissao" />
+                <FieldGroup label="Profissão *" error={validationErrors.profissao} highlighted={isFieldHighlighted("profissao")}>
+                  <Input value={formData.profissao || ""} onChange={(e) => setField("profissao", e.target.value)} placeholder="Sua profissão" disabled={isFieldDisabled("profissao")} data-testid="input-profissao" />
                 </FieldGroup>
-                <FieldGroup label="Empresa onde Trabalha">
-                  <Input value={formData.empresaTrabalho || ""} onChange={(e) => setField("empresaTrabalho", e.target.value)} placeholder="Nome da empresa" disabled={isReadOnly} data-testid="input-empresa" />
+                <FieldGroup label="Empresa onde Trabalha" highlighted={isFieldHighlighted("empresaTrabalho")}>
+                  <Input value={formData.empresaTrabalho || ""} onChange={(e) => setField("empresaTrabalho", e.target.value)} placeholder="Nome da empresa" disabled={isFieldDisabled("empresaTrabalho")} data-testid="input-empresa" />
                 </FieldGroup>
-                <FieldGroup label="CNPJ da Empresa">
+                <FieldGroup label="CNPJ da Empresa" highlighted={isFieldHighlighted("cnpjEmpresa")}>
                   <div className="flex gap-2">
-                    <Input value={formatTaxId(formData.cnpjEmpresa || "")} onChange={(e) => setField("cnpjEmpresa", e.target.value.replace(/\D/g, ""))} onBlur={lookupCnpj} placeholder="00.000.000/0001-00" maxLength={18} disabled={isReadOnly} data-testid="input-cnpj-empresa" />
+                    <Input value={formatTaxId(formData.cnpjEmpresa || "")} onChange={(e) => setField("cnpjEmpresa", e.target.value.replace(/\D/g, ""))} onBlur={lookupCnpj} placeholder="00.000.000/0001-00" maxLength={18} disabled={isFieldDisabled("cnpjEmpresa")} data-testid="input-cnpj-empresa" />
                     {cnpjLoading && <Loader2 className="w-4 h-4 animate-spin self-center text-amber-500" />}
                   </div>
                   {cnpjData && (
@@ -870,14 +926,14 @@ export default function PortalClienteFormulario() {
                     </div>
                   )}
                 </FieldGroup>
-                <FieldGroup label="Renda Mensal (R$) *" error={validationErrors.rendaMensal}>
-                  <CurrencyInput value={formData.rendaMensal} onChange={(v) => setField("rendaMensal", v)} disabled={isReadOnly} data-testid="input-renda" />
+                <FieldGroup label="Renda Mensal (R$) *" error={validationErrors.rendaMensal} highlighted={isFieldHighlighted("rendaMensal")}>
+                  <CurrencyInput value={formData.rendaMensal} onChange={(v) => setField("rendaMensal", v)} disabled={isFieldDisabled("rendaMensal")} data-testid="input-renda" />
                 </FieldGroup>
-                <FieldGroup label="Tempo de Emprego">
-                  <Input value={formData.tempoEmprego || ""} onChange={(e) => setField("tempoEmprego", e.target.value)} placeholder="Ex: 2 anos e 6 meses" disabled={isReadOnly} data-testid="input-tempo-emprego" />
+                <FieldGroup label="Tempo de Emprego" highlighted={isFieldHighlighted("tempoEmprego")}>
+                  <Input value={formData.tempoEmprego || ""} onChange={(e) => setField("tempoEmprego", e.target.value)} placeholder="Ex: 2 anos e 6 meses" disabled={isFieldDisabled("tempoEmprego")} data-testid="input-tempo-emprego" />
                 </FieldGroup>
-                <FieldGroup label="Outras Rendas">
-                  <Textarea value={formData.outrasRendas || ""} onChange={(e) => setField("outrasRendas", e.target.value)} placeholder="Descreva outras fontes de renda, se houver" rows={2} disabled={isReadOnly} data-testid="input-outras-rendas" />
+                <FieldGroup label="Outras Rendas" highlighted={isFieldHighlighted("outrasRendas")}>
+                  <Textarea value={formData.outrasRendas || ""} onChange={(e) => setField("outrasRendas", e.target.value)} placeholder="Descreva outras fontes de renda, se houver" rows={2} disabled={isFieldDisabled("outrasRendas")} data-testid="input-outras-rendas" />
                 </FieldGroup>
               </div>
               )
@@ -905,11 +961,11 @@ export default function PortalClienteFormulario() {
                       ))}
                     </div>
                   </div>
-                  <FieldGroup label="Descrição da Garantia">
-                    <Textarea value={formData.descricaoGarantia || ""} onChange={(e) => setField("descricaoGarantia", e.target.value)} placeholder="Descreva a garantia oferecida" rows={2} disabled={isReadOnly} data-testid="input-desc-garantia" />
+                  <FieldGroup label="Descrição da Garantia" highlighted={isFieldHighlighted("descricaoGarantia")}>
+                    <Textarea value={formData.descricaoGarantia || ""} onChange={(e) => setField("descricaoGarantia", e.target.value)} placeholder="Descreva a garantia oferecida" rows={2} disabled={isFieldDisabled("descricaoGarantia")} data-testid="input-desc-garantia" />
                   </FieldGroup>
-                  <FieldGroup label="Valor Estimado da Garantia (R$)">
-                    <CurrencyInput value={formData.valorGarantia} onChange={(v) => setField("valorGarantia", v)} disabled={isReadOnly} data-testid="input-valor-garantia" />
+                  <FieldGroup label="Valor Estimado da Garantia (R$)" highlighted={isFieldHighlighted("valorGarantia")}>
+                    <CurrencyInput value={formData.valorGarantia} onChange={(v) => setField("valorGarantia", v)} disabled={isFieldDisabled("valorGarantia")} data-testid="input-valor-garantia" />
                   </FieldGroup>
                 </div>
               ) : (
@@ -919,33 +975,33 @@ export default function PortalClienteFormulario() {
                     <Check className="w-3 h-3 mr-1" /> Concluir edição
                   </Button>
                 )}
-                <FieldGroup label="Valor Solicitado (R$) *" error={validationErrors.valorSolicitado}>
-                  <CurrencyInput value={formData.valorSolicitado} onChange={(v) => setField("valorSolicitado", v)} disabled={isReadOnly} data-testid="input-valor-solicitado" />
+                <FieldGroup label="Valor Solicitado (R$) *" error={validationErrors.valorSolicitado} highlighted={isFieldHighlighted("valorSolicitado")}>
+                  <CurrencyInput value={formData.valorSolicitado} onChange={(v) => setField("valorSolicitado", v)} disabled={isFieldDisabled("valorSolicitado")} data-testid="input-valor-solicitado" />
                 </FieldGroup>
-                <FieldGroup label="Finalidade do Crédito *" error={validationErrors.finalidadeCredito}>
-                  <Select value={formData.finalidadeCredito || ""} onValueChange={(v) => setField("finalidadeCredito", v)} disabled={isReadOnly}>
+                <FieldGroup label="Finalidade do Crédito *" error={validationErrors.finalidadeCredito} highlighted={isFieldHighlighted("finalidadeCredito")}>
+                  <Select value={formData.finalidadeCredito || ""} onValueChange={(v) => setField("finalidadeCredito", v)} disabled={isFieldDisabled("finalidadeCredito")}>
                     <SelectTrigger data-testid="select-finalidade"><SelectValue placeholder="Selecione a finalidade" /></SelectTrigger>
                     <SelectContent>
                       {FINALIDADES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </FieldGroup>
-                <FieldGroup label="Prazo Desejado *">
-                  <Input value={formData.prazoDesejado || ""} onChange={(e) => setField("prazoDesejado", e.target.value)} placeholder="Ex: 36 meses, 5 anos" disabled={isReadOnly} data-testid="input-prazo" />
+                <FieldGroup label="Prazo Desejado *" highlighted={isFieldHighlighted("prazoDesejado")}>
+                  <Input value={formData.prazoDesejado || ""} onChange={(e) => setField("prazoDesejado", e.target.value)} placeholder="Ex: 36 meses, 5 anos" disabled={isFieldDisabled("prazoDesejado")} data-testid="input-prazo" />
                 </FieldGroup>
-                <FieldGroup label="Tipo de Garantia *">
-                  <Select value={formData.tipoGarantia || ""} onValueChange={(v) => setField("tipoGarantia", v)} disabled={isReadOnly}>
+                <FieldGroup label="Tipo de Garantia *" highlighted={isFieldHighlighted("tipoGarantia")}>
+                  <Select value={formData.tipoGarantia || ""} onValueChange={(v) => setField("tipoGarantia", v)} disabled={isFieldDisabled("tipoGarantia")}>
                     <SelectTrigger data-testid="select-garantia"><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
                     <SelectContent>
                       {GARANTIAS.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </FieldGroup>
-                <FieldGroup label="Descrição da Garantia">
-                  <Textarea value={formData.descricaoGarantia || ""} onChange={(e) => setField("descricaoGarantia", e.target.value)} placeholder="Descreva a garantia oferecida" rows={2} disabled={isReadOnly} data-testid="input-desc-garantia" />
+                <FieldGroup label="Descrição da Garantia" highlighted={isFieldHighlighted("descricaoGarantia")}>
+                  <Textarea value={formData.descricaoGarantia || ""} onChange={(e) => setField("descricaoGarantia", e.target.value)} placeholder="Descreva a garantia oferecida" rows={2} disabled={isFieldDisabled("descricaoGarantia")} data-testid="input-desc-garantia" />
                 </FieldGroup>
-                <FieldGroup label="Valor Estimado da Garantia (R$)">
-                  <CurrencyInput value={formData.valorGarantia} onChange={(v) => setField("valorGarantia", v)} disabled={isReadOnly} data-testid="input-valor-garantia" />
+                <FieldGroup label="Valor Estimado da Garantia (R$)" highlighted={isFieldHighlighted("valorGarantia")}>
+                  <CurrencyInput value={formData.valorGarantia} onChange={(v) => setField("valorGarantia", v)} disabled={isFieldDisabled("valorGarantia")} data-testid="input-valor-garantia" />
                 </FieldGroup>
               </div>
               )
@@ -953,32 +1009,32 @@ export default function PortalClienteFormulario() {
 
             {currentStep === 5 && (
               <div className="space-y-4" data-testid="step-patrimonio">
-                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-700 bg-slate-800/60">
+                <div className={cn("flex items-center justify-between p-3 rounded-lg border bg-slate-800/60", isFieldHighlighted("possuiImovel") ? "border-amber-600/50" : "border-slate-700")}>
                   <div className="flex items-center gap-2">
                     <Home className="w-4 h-4 text-slate-400" />
                     <span className="text-sm font-medium text-slate-200">Possui Imóvel?</span>
                   </div>
-                  <Switch checked={formData.possuiImovel || false} onCheckedChange={(v) => setField("possuiImovel", v)} disabled={isReadOnly} data-testid="switch-imovel" />
+                  <Switch checked={formData.possuiImovel || false} onCheckedChange={(v) => setField("possuiImovel", v)} disabled={isFieldDisabled("possuiImovel")} data-testid="switch-imovel" />
                 </div>
                 {formData.possuiImovel && (
-                  <FieldGroup label="Valor Estimado do Imóvel (R$)">
-                    <CurrencyInput value={formData.valorImovel} onChange={(v) => setField("valorImovel", v)} disabled={isReadOnly} data-testid="input-valor-imovel" />
+                  <FieldGroup label="Valor Estimado do Imóvel (R$)" highlighted={isFieldHighlighted("valorImovel")}>
+                    <CurrencyInput value={formData.valorImovel} onChange={(v) => setField("valorImovel", v)} disabled={isFieldDisabled("valorImovel")} data-testid="input-valor-imovel" />
                   </FieldGroup>
                 )}
-                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-700 bg-slate-800/60">
+                <div className={cn("flex items-center justify-between p-3 rounded-lg border bg-slate-800/60", isFieldHighlighted("possuiVeiculo") ? "border-amber-600/50" : "border-slate-700")}>
                   <div className="flex items-center gap-2">
                     <CreditCard className="w-4 h-4 text-slate-400" />
                     <span className="text-sm font-medium text-slate-200">Possui Veículo?</span>
                   </div>
-                  <Switch checked={formData.possuiVeiculo || false} onCheckedChange={(v) => setField("possuiVeiculo", v)} disabled={isReadOnly} data-testid="switch-veiculo" />
+                  <Switch checked={formData.possuiVeiculo || false} onCheckedChange={(v) => setField("possuiVeiculo", v)} disabled={isFieldDisabled("possuiVeiculo")} data-testid="switch-veiculo" />
                 </div>
                 {formData.possuiVeiculo && (
-                  <FieldGroup label="Valor Estimado do Veículo (R$)">
-                    <CurrencyInput value={formData.valorVeiculo} onChange={(v) => setField("valorVeiculo", v)} disabled={isReadOnly} data-testid="input-valor-veiculo" />
+                  <FieldGroup label="Valor Estimado do Veículo (R$)" highlighted={isFieldHighlighted("valorVeiculo")}>
+                    <CurrencyInput value={formData.valorVeiculo} onChange={(v) => setField("valorVeiculo", v)} disabled={isFieldDisabled("valorVeiculo")} data-testid="input-valor-veiculo" />
                   </FieldGroup>
                 )}
-                <FieldGroup label="Outros Patrimônios">
-                  <Textarea value={formData.outrosPatrimonios || ""} onChange={(e) => setField("outrosPatrimonios", e.target.value)} placeholder="Descreva outros bens, investimentos, etc." rows={3} disabled={isReadOnly} data-testid="input-outros-patrimonios" />
+                <FieldGroup label="Outros Patrimônios" highlighted={isFieldHighlighted("outrosPatrimonios")}>
+                  <Textarea value={formData.outrosPatrimonios || ""} onChange={(e) => setField("outrosPatrimonios", e.target.value)} placeholder="Descreva outros bens, investimentos, etc." rows={3} disabled={isFieldDisabled("outrosPatrimonios")} data-testid="input-outros-patrimonios" />
                 </FieldGroup>
               </div>
             )}
@@ -1125,10 +1181,13 @@ export default function PortalClienteFormulario() {
   );
 }
 
-function FieldGroup({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) {
+function FieldGroup({ label, children, error, highlighted }: { label: string; children: React.ReactNode; error?: string; highlighted?: boolean }) {
   return (
-    <div className="space-y-1.5">
-      <Label className={cn("text-xs", error ? "text-red-400" : "text-slate-400")}>{label}</Label>
+    <div className={cn("space-y-1.5", highlighted && "p-2 rounded-lg border border-amber-600/50 bg-amber-950/20")}>
+      <Label className={cn("text-xs", error ? "text-red-400" : highlighted ? "text-amber-400 font-medium" : "text-slate-400")}>
+        {highlighted && <AlertTriangle className="w-3 h-3 inline mr-1 mb-0.5" />}
+        {label}
+      </Label>
       {error && <div className="[&>input]:border-red-400 [&>div>input]:border-red-400 [&>button]:border-red-400">{children}</div>}
       {!error && children}
       {error && <p className="text-[11px] text-red-500" data-testid="error-field">{error}</p>}

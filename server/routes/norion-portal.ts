@@ -102,7 +102,7 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
         conditions.push(eq(norionDocuments.clientUserId, client.id));
       }
 
-      const docs = await db.select().from(norionDocuments)
+      let docs = await db.select().from(norionDocuments)
         .where(and(...conditions));
 
       if (docs.length === 0) {
@@ -128,6 +128,55 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
 
           const inserted = await db.insert(norionDocuments).values(newDocs).returning();
           return res.json(inserted);
+        }
+      }
+
+      if (client.operationId && docs.length > 0) {
+        const clientDocs = await db.select().from(norionDocuments)
+          .where(and(eq(norionDocuments.clientUserId, client.id), eq(norionDocuments.orgId, orgId)));
+
+        if (clientDocs.length > 0) {
+          const [linkedOp] = await db.select().from(norionOperations).where(eq(norionOperations.id, client.operationId));
+          if (linkedOp?.diagnostico) {
+            const checklist = getChecklistForOperation(linkedOp.diagnostico);
+            const checklistTypes = new Set(checklist.map((c: any) => c.tipoDocumento));
+            const clientDocTypes = new Set(clientDocs.map((d: any) => d.tipoDocumento));
+            const hasActivity = clientDocs.some((d: any) => d.status !== "pendente" || d.driveFileId);
+            const typesMatch = checklist.length === clientDocs.length &&
+              checklist.every((c: any) => clientDocTypes.has(c.tipoDocumento));
+
+            if (!typesMatch && !hasActivity) {
+              await db.delete(norionDocuments)
+                .where(and(eq(norionDocuments.clientUserId, client.id), eq(norionDocuments.orgId, orgId)));
+            } else {
+              return res.json(clientDocs);
+            }
+          } else {
+            return res.json(clientDocs);
+          }
+        }
+
+        const [linkedOp] = await db.select().from(norionOperations).where(eq(norionOperations.id, client.operationId));
+        if (linkedOp?.diagnostico) {
+          const diag = linkedOp.diagnostico as any;
+          const isLegacy = !diag.modalidade && (!Array.isArray(diag.selectedDocuments) || diag.selectedDocuments.length === 0);
+
+          if (isLegacy) {
+            const checklist = getChecklistForOperation(diag);
+            const portalDocs = checklist.map((item: any) => ({
+              orgId,
+              clientUserId: client.id,
+              operationId: client.operationId,
+              categoria: item.categoria,
+              tipoDocumento: item.tipoDocumento,
+              nome: item.nome,
+              obrigatorio: item.obrigatorio,
+              status: "pendente",
+            }));
+
+            const inserted = await db.insert(norionDocuments).values(portalDocs).returning();
+            return res.json(inserted);
+          }
         }
       }
 
@@ -677,6 +726,7 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
       if (existing.status === "em_revisao") {
         updateData.status = "rascunho";
         updateData.observacaoRevisao = null;
+        updateData.camposRevisao = [];
       }
 
       const [updated] = await db.update(norionFormularioCliente)
@@ -847,11 +897,16 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
   app.patch("/api/norion/formulario/:id/revisar", requireAdminAuth, async (req, res) => {
     try {
       const fId = Number(req.params.id);
-      const { observacao } = req.body;
+      const { observacao, camposRevisao } = req.body;
       if (!observacao) return res.status(400).json({ message: "Informe o motivo da revisão" });
 
+      const updatePayload: any = { status: "em_revisao", observacaoRevisao: observacao, updatedAt: new Date() };
+      if (Array.isArray(camposRevisao) && camposRevisao.length > 0) {
+        updatePayload.camposRevisao = camposRevisao;
+      }
+
       const [updated] = await db.update(norionFormularioCliente)
-        .set({ status: "em_revisao", observacaoRevisao: observacao, updatedAt: new Date() })
+        .set(updatePayload)
         .where(eq(norionFormularioCliente.id, fId))
         .returning();
 
@@ -879,7 +934,7 @@ export function registerNorionPortalRoutes(app: Express, database: any) {
     try {
       const fId = Number(req.params.id);
       const [updated] = await db.update(norionFormularioCliente)
-        .set({ status: "aprovado", observacaoRevisao: null, updatedAt: new Date() })
+        .set({ status: "aprovado", observacaoRevisao: null, camposRevisao: [], updatedAt: new Date() })
         .where(eq(norionFormularioCliente.id, fId))
         .returning();
 

@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { eq, and, desc, ilike, sql, gte, lte, or } from "drizzle-orm";
-import { companies, norionOperations, norionDocuments, norionFundosParceiros, norionEnviosFundos, orgSettings, norionCafRegistros, norionFormularioCliente, companyDataSources, companyTimelineEvents } from "@shared/schema";
+import { companies, norionOperations, norionDocuments, norionFundosParceiros, norionEnviosFundos, orgSettings, norionCafRegistros, norionFormularioCliente, norionClientUsers, norionNotificacoes, companyDataSources, companyTimelineEvents } from "@shared/schema";
 import { storage, getOrgId, audit } from "../storage";
 import { consultarFundoCVM, listarFundosEstruturadosANBIMA, isAnbimaConfigured, clearAnbimaTokenCache, type AnbimaCredentials } from "../enrichment/fundos";
 import { enrichCompany, enrichSource, calcularPerfilEnriquecido } from "../enrichment/company-enrichment";
@@ -634,7 +634,143 @@ export function registerNorionRoutes(app: Express, db: any) {
       if (empresas.length === 0) {
         return res.status(400).json({ message: "Cadastre algumas empresas antes de rodar o demo" });
       }
+      await db.delete(norionEnviosFundos).where(eq(norionEnviosFundos.orgId, orgId));
+      await db.delete(norionNotificacoes).where(eq(norionNotificacoes.orgId, orgId));
+      await db.delete(norionDocuments).where(eq(norionDocuments.orgId, orgId));
+      await db.delete(norionFormularioCliente).where(eq(norionFormularioCliente.orgId, orgId));
+      await db.delete(norionClientUsers).where(eq(norionClientUsers.orgId, orgId));
       await db.delete(norionOperations).where(eq(norionOperations.orgId, orgId));
+      await db.delete(norionFundosParceiros).where(eq(norionFundosParceiros.orgId, orgId));
+
+      const fundosDemo = [
+        {
+          orgId,
+          nome: "FIDC Agro Brasil",
+          cnpj: "12.345.678/0001-01",
+          categoria: "FIDC",
+          tipoOperacao: ["Agro", "Capital de Giro"],
+          valorMinimo: 200000,
+          valorMaximo: 5000000,
+          prazoMinimo: "12 meses",
+          prazoMaximo: "36 meses",
+          garantiasAceitas: ["Terra", "CPR", "Recebíveis", "Penhor agrícola"],
+          contatoNome: "Carlos Mendes",
+          contatoEmail: "carlos@fidcagrobrasil.com.br",
+          contatoTelefone: "(11) 98765-4321",
+          observacoes: "Fundo especializado em crédito rural e agronegócio. Prioriza produtores com CAF ativo.",
+          ativo: true,
+          criteriosAnalise: {
+            faturamentoMinimo: 200000,
+            tempoEmpresaMinimo: 2,
+            capitalSocialMinimo: null,
+            areaRuralMinima: 50,
+            exigeCaf: true,
+            exigeCnpjAtivo: true,
+            enquadramentoPronaf: ["A", "B", "V"],
+            cnaesAceitos: ["0111", "0112", "0113", "0114", "0115", "0116", "0119", "0121", "0131", "0133", "0141", "0142", "0151", "0152", "0153", "0154", "0155"],
+            cnaesVetados: null,
+            ufsAceitas: ["MT", "MS", "GO", "MG", "SP", "PR", "TO", "BA"],
+            ufsVetadas: null,
+            porteAceito: ["ME", "EPP", "Médio"],
+            exigeGarantiaReal: false,
+            ltvMaximo: null,
+            documentosExigidos: ["matricula_propriedade", "car", "notas_fiscais_producao", "inscricao_estadual", "extratos_bancarios"],
+          },
+          condicoesComerciais: {
+            taxaJurosMin: 12,
+            taxaJurosMax: 18,
+            prazoRespostaDias: 10,
+            comissaoPercentual: 2.5,
+            notasInternas: "Fundo com boa taxa de aprovação para operações agro. Priorizar produtores com área acima de 100ha e CAF ativo.",
+          },
+        },
+        {
+          orgId,
+          nome: "Securitizadora Real Capital",
+          cnpj: "23.456.789/0001-02",
+          categoria: "Securitizadora",
+          tipoOperacao: ["Home Equity", "Imóvel"],
+          valorMinimo: 300000,
+          valorMaximo: 10000000,
+          prazoMinimo: "24 meses",
+          prazoMaximo: "120 meses",
+          garantiasAceitas: ["Imóvel", "Alienação fiduciária"],
+          contatoNome: "Fernanda Lima",
+          contatoEmail: "fernanda@realcapital.com.br",
+          contatoTelefone: "(21) 99876-5432",
+          observacoes: "Securitizadora focada em home equity e crédito imobiliário. Exige garantia real com LTV conservador.",
+          ativo: true,
+          criteriosAnalise: {
+            faturamentoMinimo: null,
+            tempoEmpresaMinimo: 3,
+            capitalSocialMinimo: 500000,
+            areaRuralMinima: null,
+            exigeCaf: false,
+            exigeCnpjAtivo: true,
+            enquadramentoPronaf: null,
+            cnaesAceitos: null,
+            cnaesVetados: ["9200", "9211", "9212", "9319"],
+            ufsAceitas: null,
+            ufsVetadas: ["AC", "AP", "RR"],
+            porteAceito: ["EPP", "Médio", "Grande"],
+            exigeGarantiaReal: true,
+            ltvMaximo: 60,
+            documentosExigidos: ["matricula_imovel", "iptu", "escritura", "fotos_imovel", "planilha_garantias", "certidoes_imovel"],
+          },
+          condicoesComerciais: {
+            taxaJurosMin: 14,
+            taxaJurosMax: 22,
+            prazoRespostaDias: 15,
+            comissaoPercentual: 2,
+            notasInternas: "Aceita imóveis urbanos e rurais como garantia. LTV máximo de 60%. Avaliação de imóvel obrigatória por engenheiro credenciado.",
+          },
+        },
+        {
+          orgId,
+          nome: "FIP Expansion Partners",
+          cnpj: "34.567.890/0001-03",
+          categoria: "FIP",
+          tipoOperacao: ["Capital de Giro", "Expansão", "Equipamentos"],
+          valorMinimo: 500000,
+          valorMaximo: 20000000,
+          prazoMinimo: "12 meses",
+          prazoMaximo: "60 meses",
+          garantiasAceitas: ["Recebíveis", "Equipamentos", "Aval dos sócios", "Fiança bancária"],
+          contatoNome: "Ricardo Alves",
+          contatoEmail: "ricardo@expansionpartners.com.br",
+          contatoTelefone: "(11) 91234-5678",
+          observacoes: "FIP focado em empresas de médio e grande porte em fase de expansão. Análise criteriosa de balanço e projeções.",
+          ativo: true,
+          criteriosAnalise: {
+            faturamentoMinimo: 2000000,
+            tempoEmpresaMinimo: 5,
+            capitalSocialMinimo: 1000000,
+            areaRuralMinima: null,
+            exigeCaf: false,
+            exigeCnpjAtivo: true,
+            enquadramentoPronaf: null,
+            cnaesAceitos: null,
+            cnaesVetados: ["9200", "9211", "9212"],
+            ufsAceitas: null,
+            ufsVetadas: null,
+            porteAceito: ["Médio", "Grande"],
+            exigeGarantiaReal: false,
+            ltvMaximo: null,
+            documentosExigidos: ["contrato_social", "balanco_dre_3anos", "relacao_faturamento_12m", "relacao_endividamento", "extratos_bancarios", "certidoes_negativas"],
+          },
+          condicoesComerciais: {
+            taxaJurosMin: 10,
+            taxaJurosMax: 16,
+            prazoRespostaDias: 20,
+            comissaoPercentual: 3,
+            notasInternas: "Fundo exigente com análise financeira detalhada. Bom para empresas consolidadas com faturamento acima de R$ 2M. Prazo de análise pode ser longo.",
+          },
+        },
+      ];
+
+      for (const fundo of fundosDemo) {
+        await db.insert(norionFundosParceiros).values(fundo);
+      }
 
       const operacoesDemo = [
         {
@@ -740,7 +876,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         });
       }
 
-      res.json({ success: true, message: `${operacoesDemo.length} operações de demonstração criadas com sucesso` });
+      res.json({ success: true, message: `${operacoesDemo.length} operações e ${fundosDemo.length} fundos parceiros de demonstração criados com sucesso` });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
@@ -950,6 +1086,9 @@ export function registerNorionRoutes(app: Express, db: any) {
       const orgId = getOrgId();
       const docId = Number(req.params.id);
       const { status, observacao, driveFileId, driveFileUrl, nomeArquivo } = req.body;
+      if (status === "rejeitado" && (!observacao || !observacao.trim())) {
+        return res.status(400).json({ message: "Motivo da rejeição é obrigatório" });
+      }
       const updateData: Record<string, any> = {};
       if (status) updateData.status = status;
       if (observacao !== undefined) updateData.observacao = observacao;
@@ -1015,11 +1154,13 @@ export function registerNorionRoutes(app: Express, db: any) {
     try {
       const orgId = getOrgId();
       const user = req.user as any;
-      const { nome, cnpj, categoria, tipoOperacao, valorMinimo, valorMaximo, prazoMinimo, prazoMaximo, garantiasAceitas, contatoNome, contatoEmail, contatoTelefone, observacoes } = req.body;
+      const { nome, cnpj, categoria, tipoOperacao, valorMinimo, valorMaximo, prazoMinimo, prazoMaximo, garantiasAceitas, contatoNome, contatoEmail, contatoTelefone, observacoes, criteriosAnalise, condicoesComerciais } = req.body;
       if (!nome) return res.status(400).json({ message: "Nome é obrigatório" });
       const fundo = await storage.createNorionFundoParceiro({
         orgId, nome, cnpj, categoria, tipoOperacao, valorMinimo, valorMaximo,
         prazoMinimo, prazoMaximo, garantiasAceitas, contatoNome, contatoEmail, contatoTelefone, observacoes,
+        criteriosAnalise: criteriosAnalise || null,
+        condicoesComerciais: condicoesComerciais || null,
       });
       await audit({ orgId, userId: user?.id, userName: user?.username,
         entity: "norion_fundo_parceiro", entityId: fundo.id, entityTitle: nome,
@@ -1426,6 +1567,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         company = c || null;
       }
       const enrichment = (company?.enrichmentData as any) || {};
+      const address = (company?.address as any) || {};
 
       const fundos = await storage.getNorionFundosParceiros(orgId);
       const ativos = fundos.filter(f => f.ativo !== false);
@@ -1434,83 +1576,382 @@ export function registerNorionRoutes(app: Express, db: any) {
       const garantiasOp = (diag.garantias || []) as string[];
       const finalidade = (diag.finalidade || "") as string;
 
-      const scored = ativos.map(f => {
-        let score = 0;
-        let reasons: string[] = [];
+      const empresaUf = (address?.uf || enrichment?.cnpj?.uf || "").toUpperCase().trim();
+      const empresaCnae = (company?.cnaePrincipal || enrichment?.cnpj?.cnaePrincipal || "").trim();
+      const empresaCnaeShort = empresaCnae.substring(0, 2);
+      const situacaoCadastral = (enrichment?.cnpj?.situacaoCadastral || "").toUpperCase();
+      const empresaAtiva = situacaoCadastral.includes("ATIVA");
+      const empresaPorte = (company?.porte || enrichment?.cnpj?.porte || "").toUpperCase().trim();
+      const capitalSocial = enrichment?.cnpj?.capitalSocial || company?.revenueEstimate || 0;
+      const faturamento = enrichment?.faturamento || diag.faturamentoAnual || 0;
+      const cafData = enrichment?.caf;
+      const qsa = enrichment?.qsa || [];
+      const temCAF = !!(qsa.some((s: any) => s.temDAP) || cafData?.numeroCAF);
 
-        if (f.tipoOperacao && f.tipoOperacao.length > 0 && finalidade) {
-          if (f.tipoOperacao.some(t => t.toLowerCase() === finalidade.toLowerCase())) {
-            score += 30;
-            reasons.push("Tipo de operação compatível");
+      let cafRegistros: any[] = [];
+      if (op.companyId) {
+        cafRegistros = await db.select().from(norionCafRegistros)
+          .where(and(eq(norionCafRegistros.orgId, orgId), eq(norionCafRegistros.companyId, op.companyId)));
+      }
+      const areaTotal = cafRegistros.reduce((sum, c) => sum + (c.totalEstabelecimentoHa || c.areaHa || 0), 0);
+      const enquadramentoEmpresa = cafRegistros.map(c => c.enquadramentoPronaf).filter(Boolean);
+
+      const dataFundacao = enrichment?.cnpj?.dataAbertura || enrichment?.cnpj?.dataInicio;
+      let tempoEmpresaAnos = 0;
+      if (dataFundacao) {
+        const dt = new Date(dataFundacao);
+        if (!isNaN(dt.getTime())) {
+          tempoEmpresaAnos = (Date.now() - dt.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+        }
+      }
+
+      const allEnvios = await db.select().from(norionEnviosFundos).where(eq(norionEnviosFundos.orgId, orgId));
+      const enviosByFundo: Record<number, typeof allEnvios> = {};
+      for (const e of allEnvios) {
+        if (e.fundoParceiroId) {
+          if (!enviosByFundo[e.fundoParceiroId]) enviosByFundo[e.fundoParceiroId] = [];
+          enviosByFundo[e.fundoParceiroId].push(e);
+        }
+      }
+
+      const results = ativos.map(f => {
+        const crit = (f.criteriosAnalise as any) || {};
+        const cond = (f.condicoesComerciais as any) || {};
+        let eliminado = false;
+        let motivoEliminacao = "";
+        const reasons: string[] = [];
+        const gaps: string[] = [];
+
+        if (crit.ufsVetadas && crit.ufsVetadas.length > 0 && empresaUf) {
+          if (crit.ufsVetadas.map((u: string) => u.toUpperCase()).includes(empresaUf)) {
+            eliminado = true;
+            motivoEliminacao = `UF da empresa (${empresaUf}) está na lista de UFs vetadas pelo fundo`;
           }
-        } else {
-          score += 15;
         }
 
+        if (!eliminado && crit.cnaesVetados && crit.cnaesVetados.length > 0 && empresaCnae) {
+          const vetados = crit.cnaesVetados.map((c: string) => c.trim());
+          if (vetados.some((v: string) => empresaCnae.startsWith(v) || empresaCnaeShort === v)) {
+            eliminado = true;
+            motivoEliminacao = `CNAE principal (${empresaCnae}) está na lista de CNAEs vetados pelo fundo`;
+          }
+        }
+
+        const cnpjInfoAvailable = !!enrichment?.cnpj?.situacaoCadastral;
+        if (!eliminado && crit.exigeCnpjAtivo && cnpjInfoAvailable && !empresaAtiva) {
+          eliminado = true;
+          motivoEliminacao = "Fundo exige CNPJ ativo na Receita Federal, mas a empresa não está ativa";
+        }
+        if (!eliminado && crit.exigeCnpjAtivo && !cnpjInfoAvailable) {
+          gaps.push("Fundo exige CNPJ ativo — consulta CNPJ ainda não realizada (recomenda-se enriquecer empresa)");
+        }
+
+        if (!eliminado && crit.exigeGarantiaReal && garantiasOp.length > 0) {
+          const temGarantiaReal = garantiasOp.some(g => {
+            const gl = g.toLowerCase();
+            return gl.includes("imóvel") || gl.includes("imovel") || gl.includes("terra") || gl.includes("propriedade") || gl.includes("real") || gl.includes("alienação") || gl.includes("alienacao");
+          });
+          if (!temGarantiaReal) {
+            eliminado = true;
+            motivoEliminacao = `Fundo exige garantia real (imóvel/terra), mas as garantias oferecidas (${garantiasOp.join(", ")}) não atendem`;
+          }
+        }
+
+        if (!eliminado && crit.exigeCaf && !temCAF && cafRegistros.length === 0) {
+          const cafInfoAvailable = enrichment?.caf || cafRegistros.length > 0;
+          if (cafInfoAvailable || (!enrichment?.caf && cafRegistros.length === 0)) {
+            eliminado = true;
+            motivoEliminacao = "Fundo exige CAF/DAP ativo, mas nenhum registro foi identificado para a empresa";
+          }
+        }
+
+        if (!eliminado && crit.porteAceito && crit.porteAceito.length > 0 && empresaPorte) {
+          const normalizePorte = (p: string) => p.toUpperCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace("EMPRESA DE PEQUENO PORTE", "EPP")
+            .replace("MICRO EMPRESA", "ME").replace("MICROEMPRESA", "ME")
+            .trim();
+          const porteNorm = normalizePorte(empresaPorte);
+          const aceitos = crit.porteAceito.map((p: string) => normalizePorte(p));
+          if (!aceitos.some((a: string) => porteNorm.includes(a) || a.includes(porteNorm))) {
+            eliminado = true;
+            motivoEliminacao = `Porte da empresa (${empresaPorte}) não é aceito pelo fundo (aceitos: ${crit.porteAceito.join(", ")})`;
+          }
+        }
+
+        if (!eliminado && valorSolicitado > 0) {
+          const min = f.valorMinimo || 0;
+          const max = f.valorMaximo || Infinity;
+          if (valorSolicitado < min) {
+            eliminado = true;
+            motivoEliminacao = `Valor solicitado (R$ ${(valorSolicitado / 1000).toFixed(0)}k) abaixo do mínimo do fundo (R$ ${(min / 1000).toFixed(0)}k)`;
+          } else if (valorSolicitado > max && max !== Infinity) {
+            eliminado = true;
+            motivoEliminacao = `Valor solicitado (R$ ${(valorSolicitado / 1000).toFixed(0)}k) acima do máximo do fundo (R$ ${(max / 1000).toFixed(0)}k)`;
+          }
+        }
+
+        if (eliminado) {
+          return { fundo: f, score: 0, reasons: [], gaps: [motivoEliminacao], eliminado: true, motivoEliminacao };
+        }
+
+        let score = 0;
+
+        let opPoints = 0;
+        if (f.tipoOperacao && f.tipoOperacao.length > 0 && finalidade) {
+          if (f.tipoOperacao.some(t => t.toLowerCase() === finalidade.toLowerCase())) {
+            opPoints = 20;
+            reasons.push("Tipo de operação compatível");
+          } else {
+            gaps.push(`Finalidade "${finalidade}" não está entre os tipos aceitos (${f.tipoOperacao.join(", ")})`);
+          }
+        } else if (!f.tipoOperacao || f.tipoOperacao.length === 0) {
+          opPoints = 10;
+          reasons.push("Fundo aceita diversos tipos de operação");
+        }
+        score += opPoints;
+
+        let valorPoints = 0;
         if (valorSolicitado > 0) {
           const min = f.valorMinimo || 0;
           const max = f.valorMaximo || Infinity;
           if (valorSolicitado >= min && valorSolicitado <= max) {
-            score += 30;
-            reasons.push("Valor dentro da faixa");
-          } else if (valorSolicitado >= min * 0.8 && valorSolicitado <= max * 1.2) {
-            score += 15;
-            reasons.push("Valor próximo da faixa");
+            valorPoints = 15;
+            reasons.push("Valor dentro da faixa aceita pelo fundo");
+          } else {
+            const margin = max !== Infinity ? max * 1.2 : Infinity;
+            const marginMin = min * 0.8;
+            if (valorSolicitado >= marginMin && valorSolicitado <= margin) {
+              valorPoints = 8;
+              reasons.push("Valor próximo da faixa (margem de 20%)");
+              gaps.push(`Valor solicitado fora da faixa ideal (R$ ${(min / 1000).toFixed(0)}k - R$ ${max !== Infinity ? (max / 1000).toFixed(0) + "k" : "sem limite"})`);
+            }
           }
         } else {
-          score += 15;
+          valorPoints = 7;
         }
+        score += valorPoints;
 
+        let garantiaPoints = 0;
         if (f.garantiasAceitas && f.garantiasAceitas.length > 0 && garantiasOp.length > 0) {
-          const match = garantiasOp.filter(g => f.garantiasAceitas!.some(ga => ga.toLowerCase() === g.toLowerCase()));
-          if (match.length > 0) {
-            score += 25 * (match.length / garantiasOp.length);
-            reasons.push(`Garantias compatíveis (${match.join(", ")})`);
+          const matched = garantiasOp.filter(g => f.garantiasAceitas!.some(ga => ga.toLowerCase() === g.toLowerCase()));
+          if (matched.length > 0) {
+            garantiaPoints = Math.round(15 * (matched.length / Math.max(garantiasOp.length, 1)));
+            reasons.push(`Garantias compatíveis: ${matched.join(", ")}`);
+          }
+          const unmatched = garantiasOp.filter(g => !f.garantiasAceitas!.some(ga => ga.toLowerCase() === g.toLowerCase()));
+          if (unmatched.length > 0) {
+            gaps.push(`Garantias não aceitas pelo fundo: ${unmatched.join(", ")}`);
+          }
+        } else if (!f.garantiasAceitas || f.garantiasAceitas.length === 0) {
+          garantiaPoints = 7;
+        } else if (garantiasOp.length === 0) {
+          gaps.push("Nenhuma garantia informada na operação");
+        }
+        if (crit.exigeGarantiaReal) {
+          const temGarantiaReal = garantiasOp.some(g => {
+            const gl = g.toLowerCase();
+            return gl.includes("imóvel") || gl.includes("imovel") || gl.includes("terra") || gl.includes("propriedade") || gl.includes("real") || gl.includes("alienação") || gl.includes("alienacao");
+          });
+          if (temGarantiaReal) {
+            reasons.push("Garantia real disponível conforme exigido");
+          } else if (garantiasOp.length === 0) {
+            gaps.push("Fundo exige garantia real (imóvel/terra), mas nenhuma garantia informada na operação");
+          }
+        }
+        score += garantiaPoints;
+
+        let perfilFinPoints = 0;
+        if (faturamento > 0 && crit.faturamentoMinimo) {
+          if (faturamento >= crit.faturamentoMinimo) {
+            perfilFinPoints += 5;
+            reasons.push(`Faturamento (R$ ${(faturamento / 1000).toFixed(0)}k) atende o mínimo exigido`);
+          } else {
+            gaps.push(`Faturamento (R$ ${(faturamento / 1000).toFixed(0)}k) abaixo do mínimo exigido (R$ ${(crit.faturamentoMinimo / 1000).toFixed(0)}k)`);
+          }
+        } else if (!crit.faturamentoMinimo) {
+          perfilFinPoints += 3;
+        }
+
+        if (capitalSocial > 0 && crit.capitalSocialMinimo) {
+          if (capitalSocial >= crit.capitalSocialMinimo) {
+            perfilFinPoints += 5;
+            reasons.push(`Capital social (R$ ${(capitalSocial / 1000).toFixed(0)}k) atende o mínimo exigido`);
+          } else {
+            gaps.push(`Capital social (R$ ${(capitalSocial / 1000).toFixed(0)}k) abaixo do mínimo exigido (R$ ${(crit.capitalSocialMinimo / 1000).toFixed(0)}k)`);
+          }
+        } else if (!crit.capitalSocialMinimo) {
+          perfilFinPoints += 3;
+        }
+
+        if (crit.tempoEmpresaMinimo) {
+          if (tempoEmpresaAnos >= crit.tempoEmpresaMinimo) {
+            perfilFinPoints += 5;
+            reasons.push(`Tempo de empresa (${tempoEmpresaAnos.toFixed(1)} anos) atende o mínimo exigido`);
+          } else if (tempoEmpresaAnos > 0) {
+            gaps.push(`Tempo de empresa (${tempoEmpresaAnos.toFixed(1)} anos) abaixo do mínimo exigido (${crit.tempoEmpresaMinimo} anos)`);
+          } else {
+            gaps.push(`Tempo de empresa não identificado (mínimo exigido: ${crit.tempoEmpresaMinimo} anos)`);
           }
         } else {
-          score += 12;
+          perfilFinPoints += 3;
+        }
+        score += perfilFinPoints;
+
+        let agroPoints = 0;
+        if (crit.exigeCaf || crit.areaRuralMinima || crit.enquadramentoPronaf) {
+          if (temCAF || cafRegistros.length > 0) {
+            agroPoints += 7;
+            reasons.push("Produtor rural com CAF/DAP ativo");
+          }
+
+          if (crit.areaRuralMinima) {
+            if (areaTotal >= crit.areaRuralMinima) {
+              agroPoints += 4;
+              reasons.push(`Área rural (${areaTotal.toFixed(0)} ha) atende o mínimo exigido`);
+            } else if (areaTotal > 0) {
+              gaps.push(`Área rural (${areaTotal.toFixed(0)} ha) abaixo do mínimo exigido (${crit.areaRuralMinima} ha)`);
+            } else {
+              gaps.push(`Área rural não informada (mínimo exigido: ${crit.areaRuralMinima} ha)`);
+            }
+          }
+
+          if (crit.enquadramentoPronaf && crit.enquadramentoPronaf.length > 0) {
+            if (enquadramentoEmpresa.length > 0) {
+              const match = enquadramentoEmpresa.some(e => crit.enquadramentoPronaf!.includes(e));
+              if (match) {
+                agroPoints += 4;
+                reasons.push("Enquadramento PRONAF compatível");
+              } else {
+                gaps.push(`Enquadramento PRONAF (${enquadramentoEmpresa.join(", ")}) não está entre os aceitos (${crit.enquadramentoPronaf.join(", ")})`);
+              }
+            } else {
+              gaps.push(`Enquadramento PRONAF não identificado (aceitos: ${crit.enquadramentoPronaf.join(", ")})`);
+            }
+          }
+        } else {
+          if (temCAF || cafRegistros.length > 0) {
+            agroPoints += 5;
+            reasons.push("Produtor rural com CAF/DAP registrado");
+          }
+        }
+        score += agroPoints;
+
+        let conformPoints = 0;
+        if (empresaAtiva) {
+          conformPoints += 3;
+          reasons.push("CNPJ ativo na Receita Federal");
+        } else if (situacaoCadastral) {
+          gaps.push(`Situação cadastral: ${situacaoCadastral}`);
         }
 
-        score += 15;
-        reasons.push("Fundo ativo");
-
-        const profileScore = company?.profileScore || 0;
-        if (profileScore > 65) {
-          score += 10;
-          reasons.push(`Perfil alto (score ${profileScore})`);
-        } else if (profileScore > 40) {
-          score += 5;
-          reasons.push(`Perfil médio (score ${profileScore})`);
+        if (crit.porteAceito && crit.porteAceito.length > 0 && empresaPorte) {
+          conformPoints += 3;
+          reasons.push(`Porte da empresa aceito pelo fundo`);
+        } else if (crit.porteAceito && crit.porteAceito.length > 0 && !empresaPorte) {
+          gaps.push(`Porte da empresa não identificado (aceitos: ${crit.porteAceito.join(", ")})`);
+        } else if (!crit.porteAceito || crit.porteAceito.length === 0) {
+          conformPoints += 2;
         }
 
-        const situacao = (enrichment?.cnpj?.situacaoCadastral || "").toUpperCase();
-        if (situacao.includes("ATIVA")) {
-          score += 5;
-          reasons.push("Empresa ativa na Receita Federal");
+        if (crit.ufsAceitas && crit.ufsAceitas.length > 0 && empresaUf) {
+          if (crit.ufsAceitas.map((u: string) => u.toUpperCase()).includes(empresaUf)) {
+            conformPoints += 2;
+            reasons.push(`UF da empresa (${empresaUf}) aceita pelo fundo`);
+          } else {
+            gaps.push(`UF da empresa (${empresaUf}) não está entre as UFs preferenciais (${crit.ufsAceitas.join(", ")})`);
+          }
+        } else if (!crit.ufsAceitas || crit.ufsAceitas.length === 0) {
+          conformPoints += 1;
         }
 
-        const cafData = enrichment?.caf;
-        const qsa = enrichment?.qsa || [];
-        const temDAP = qsa.some((s: any) => s.temDAP) || cafData?.numeroCAF;
-        if (temDAP && finalidade.toLowerCase().includes("agro")) {
-          score += 10;
-          reasons.push("Produtor rural com CAF/DAP ativo");
-        } else if (temDAP) {
-          score += 5;
-          reasons.push("CAF/DAP registrado");
+        if (crit.cnaesAceitos && crit.cnaesAceitos.length > 0 && empresaCnae) {
+          const aceitos = crit.cnaesAceitos.map((c: string) => c.trim());
+          if (aceitos.some((a: string) => empresaCnae.startsWith(a) || empresaCnaeShort === a)) {
+            conformPoints += 2;
+            reasons.push("CNAE principal aceito pelo fundo");
+          } else {
+            gaps.push(`CNAE principal (${empresaCnae}) não está entre os prioritários do fundo`);
+          }
+        } else if (!crit.cnaesAceitos || crit.cnaesAceitos.length === 0) {
+          conformPoints += 1;
+        }
+        score += conformPoints;
+
+        let histPoints = 0;
+        const enviosDoFundo = enviosByFundo[f.id] || [];
+        if (enviosDoFundo.length >= 3) {
+          const respondidos = enviosDoFundo.filter(e => ["aprovado", "recusado"].includes(e.status));
+          const aprovados = enviosDoFundo.filter(e => e.status === "aprovado");
+          if (respondidos.length > 0) {
+            const taxaAprovacao = aprovados.length / respondidos.length;
+            if (taxaAprovacao > 0.5) {
+              histPoints += 5;
+              reasons.push(`Taxa de aprovação do fundo: ${(taxaAprovacao * 100).toFixed(0)}%`);
+            } else {
+              gaps.push(`Taxa de aprovação histórica baixa: ${(taxaAprovacao * 100).toFixed(0)}%`);
+            }
+          }
+
+          const comResposta = enviosDoFundo.filter(e => e.dataEnvio && e.dataResposta);
+          if (comResposta.length > 0) {
+            const tempoMedio = comResposta.reduce((sum, e) => {
+              const envio = new Date(e.dataEnvio!).getTime();
+              const resp = new Date(e.dataResposta!).getTime();
+              return sum + (resp - envio) / (1000 * 60 * 60 * 24);
+            }, 0) / comResposta.length;
+            if (tempoMedio < 15) {
+              histPoints += 5;
+              reasons.push(`Tempo médio de resposta: ${tempoMedio.toFixed(0)} dias`);
+            } else {
+              gaps.push(`Tempo médio de resposta elevado: ${tempoMedio.toFixed(0)} dias`);
+            }
+          }
+        }
+        score += histPoints;
+
+        if (crit.ltvMaximo && valorSolicitado > 0) {
+          const valorGarantia = diag.valorGarantia || diag.valorImovel || 0;
+          if (valorGarantia > 0) {
+            const ltv = (valorSolicitado / valorGarantia) * 100;
+            if (ltv <= crit.ltvMaximo) {
+              reasons.push(`LTV (${ltv.toFixed(0)}%) dentro do limite do fundo (${crit.ltvMaximo}%)`);
+            } else {
+              gaps.push(`LTV (${ltv.toFixed(0)}%) acima do máximo aceito pelo fundo (${crit.ltvMaximo}%)`);
+            }
+          }
         }
 
-        const capitalSocial = enrichment?.cnpj?.capitalSocial || 0;
-        if (capitalSocial > 0 && valorSolicitado > 0 && capitalSocial > valorSolicitado * 0.1) {
-          score += 5;
-          reasons.push(`Capital social adequado (R$ ${(capitalSocial / 1000).toFixed(0)}k)`);
+        if (crit.documentosExigidos && crit.documentosExigidos.length > 0) {
+          gaps.push(`Documentos exigidos pelo fundo: ${crit.documentosExigidos.join(", ")}`);
         }
 
-        return { fundo: f, score: Math.min(Math.round(score), 100), reasons };
+        const scoreBreakdown = {
+          operacao: { pontos: opPoints, max: 20 },
+          valor: { pontos: valorPoints, max: 15 },
+          garantias: { pontos: garantiaPoints, max: 15 },
+          perfilFinanceiro: { pontos: perfilFinPoints, max: 15 },
+          perfilAgro: { pontos: agroPoints, max: 15 },
+          conformidade: { pontos: conformPoints, max: 10 },
+          historico: { pontos: histPoints, max: 10 },
+        };
+
+        return {
+          fundo: f,
+          score: Math.min(Math.round(score), 100),
+          scoreBreakdown,
+          reasons,
+          gaps,
+          eliminado: false,
+          motivoEliminacao: null,
+        };
       });
 
-      scored.sort((a, b) => b.score - a.score);
-      res.json(scored);
+      results.sort((a, b) => {
+        if (a.eliminado !== b.eliminado) return a.eliminado ? 1 : -1;
+        return b.score - a.score;
+      });
+      res.json(results);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

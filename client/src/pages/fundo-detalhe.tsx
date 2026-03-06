@@ -5,9 +5,9 @@ import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft, Loader2, CheckCircle2, XCircle, BarChart3,
-  DollarSign, Clock, Percent,
+  DollarSign, Clock, Percent, MapPin, Building2, Wheat, FileText, ShieldCheck,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -22,6 +22,41 @@ function formatBRL(value: number | null | undefined) {
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return "—";
   return new Date(dateStr).toLocaleDateString("pt-BR");
+}
+
+function CriterioItem({ label, value }: { label: string; value: string | number | null | undefined }) {
+  if (value == null || value === "" || value === "—") return null;
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm">{value}</p>
+    </div>
+  );
+}
+
+function BooleanItem({ label, value }: { label: string; value: boolean | undefined }) {
+  if (value === undefined) return null;
+  return (
+    <div className="flex items-center gap-2">
+      {value ? (
+        <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+      ) : (
+        <XCircle className="w-4 h-4 text-muted-foreground shrink-0" />
+      )}
+      <span className="text-sm">{label}</span>
+    </div>
+  );
+}
+
+function ChipList({ items }: { items: string[] | null | undefined }) {
+  if (!items || items.length === 0) return <span className="text-sm text-muted-foreground">Não especificado</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {items.map(item => (
+        <Badge key={item} variant="outline" className="text-xs">{item}</Badge>
+      ))}
+    </div>
+  );
 }
 
 export default function FundoDetalhePage({ id }: { id: string }) {
@@ -53,6 +88,11 @@ export default function FundoDetalhePage({ id }: { id: string }) {
   const fundo = historico?.fundo;
   const metricas = historico?.metricas;
   const envios = historico?.envios || [];
+  const criterios = fundo?.criteriosAnalise || {};
+  const condicoes = fundo?.condicoesComerciais || {};
+
+  const hasCriterios = fundo && Object.keys(criterios).length > 0;
+  const hasCondicoes = fundo && Object.keys(condicoes).length > 0;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -128,7 +168,7 @@ export default function FundoDetalhePage({ id }: { id: string }) {
 
           <Card>
             <CardContent className="p-4">
-              <p className="text-sm font-medium mb-3">Critérios</p>
+              <p className="text-sm font-medium mb-3">Critérios Básicos</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                 <div><p className="text-xs text-muted-foreground">Tipos</p><p>{(fundo.tipoOperacao || []).join(", ") || "—"}</p></div>
                 <div><p className="text-xs text-muted-foreground">Garantias</p><p>{(fundo.garantiasAceitas || []).join(", ") || "—"}</p></div>
@@ -139,6 +179,138 @@ export default function FundoDetalhePage({ id }: { id: string }) {
               </div>
             </CardContent>
           </Card>
+
+          {hasCriterios && (
+            <>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <DollarSign className="w-4 h-4" />
+                    Requisitos Financeiros
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <CriterioItem label="Faturamento Mínimo" value={criterios.faturamentoMinimo ? formatBRL(criterios.faturamentoMinimo) : undefined} />
+                    <CriterioItem label="Capital Social Mínimo" value={criterios.capitalSocialMinimo ? formatBRL(criterios.capitalSocialMinimo) : undefined} />
+                    <CriterioItem label="Tempo de Empresa Mínimo" value={criterios.tempoEmpresaMinimo ? `${criterios.tempoEmpresaMinimo} anos` : undefined} />
+                    <CriterioItem label="LTV Máximo" value={criterios.ltvMaximo ? `${criterios.ltvMaximo}%` : undefined} />
+                  </div>
+                  <div className="flex flex-wrap gap-4 mt-3">
+                    <BooleanItem label="Exige CNPJ Ativo" value={criterios.exigeCnpjAtivo} />
+                    <BooleanItem label="Exige Garantia Real" value={criterios.exigeGarantiaReal} />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {(criterios.ufsAceitas?.length || criterios.ufsVetadas?.length || criterios.porteAceito?.length || criterios.cnaesAceitos?.length || criterios.cnaesVetados?.length) && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Restrições Geográficas / Setoriais
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-2 space-y-3">
+                    {criterios.ufsAceitas?.length > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">UFs Aceitas</p>
+                        <ChipList items={criterios.ufsAceitas} />
+                      </div>
+                    )}
+                    {criterios.ufsVetadas?.length > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">UFs Vetadas</p>
+                        <ChipList items={criterios.ufsVetadas} />
+                      </div>
+                    )}
+                    {criterios.porteAceito?.length > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Portes Aceitos</p>
+                        <ChipList items={criterios.porteAceito} />
+                      </div>
+                    )}
+                    {criterios.cnaesAceitos?.length > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">CNAEs Aceitos</p>
+                        <ChipList items={criterios.cnaesAceitos} />
+                      </div>
+                    )}
+                    {criterios.cnaesVetados?.length > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">CNAEs Vetados</p>
+                        <ChipList items={criterios.cnaesVetados} />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {(criterios.exigeCaf || criterios.areaRuralMinima || criterios.enquadramentoPronaf?.length) && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Wheat className="w-4 h-4" />
+                      Requisitos Agro
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-2 space-y-3">
+                    <BooleanItem label="Exige CAF/DAP Ativo" value={criterios.exigeCaf} />
+                    <CriterioItem label="Área Rural Mínima" value={criterios.areaRuralMinima ? `${criterios.areaRuralMinima} ha` : undefined} />
+                    {criterios.enquadramentoPronaf?.length > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Enquadramento PRONAF</p>
+                        <ChipList items={criterios.enquadramentoPronaf} />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {criterios.documentosExigidos?.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Documentos Exigidos
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-2">
+                    <div className="flex flex-wrap gap-1">
+                      {criterios.documentosExigidos.map((doc: string) => (
+                        <Badge key={doc} variant="outline" className="text-xs">{doc}</Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+
+          {hasCondicoes && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4" />
+                  Condições Comerciais
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <CriterioItem label="Taxa de Juros Mín" value={condicoes.taxaJurosMin != null ? `${condicoes.taxaJurosMin}% a.a.` : undefined} />
+                  <CriterioItem label="Taxa de Juros Máx" value={condicoes.taxaJurosMax != null ? `${condicoes.taxaJurosMax}% a.a.` : undefined} />
+                  <CriterioItem label="Prazo de Resposta" value={condicoes.prazoRespostaDias != null ? `${condicoes.prazoRespostaDias} dias` : undefined} />
+                  <CriterioItem label="Comissão Norion" value={condicoes.comissaoPercentual != null ? `${condicoes.comissaoPercentual}%` : undefined} />
+                </div>
+                {condicoes.notasInternas && (
+                  <div className="mt-3">
+                    <p className="text-xs text-muted-foreground mb-1">Notas Internas</p>
+                    <p className="text-sm">{condicoes.notasInternas}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {(fundo.contatoNome || fundo.contatoEmail || fundo.contatoTelefone) && (
             <Card>
