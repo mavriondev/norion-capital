@@ -349,7 +349,7 @@ export default function PortalClienteDashboard() {
                             data-testid={`portal-doc-${doc.id}`}
                           >
                             <div className="flex-1 min-w-0 mr-3">
-                              <p className="text-sm font-medium truncate text-slate-100">{doc.nomeDocumento || doc.tipoDocumento}</p>
+                              <p className="text-sm font-medium truncate text-slate-100">{doc.nome || doc.tipoDocumento}</p>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <Badge variant={statusConf.variant} className="text-[10px]">{statusConf.label}</Badge>
                                 {doc.obrigatorio && <span className="text-[10px] text-red-500">Obrigatório</span>}

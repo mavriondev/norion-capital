@@ -32,7 +32,7 @@ export default function PortalClienteLogin() {
   useEffect(() => {
     const existing = sessionStorage.getItem("portalClientId");
     if (existing) {
-      setLocation("/portal-cliente/formulario");
+      setLocation("/portal-cliente/dashboard");
       return;
     }
     const params = new URLSearchParams(window.location.search);
@@ -57,7 +57,7 @@ export default function PortalClienteLogin() {
       sessionStorage.setItem("portalClientId", String(data.client.id));
       sessionStorage.setItem("portalToken", data.sessionToken);
       sessionStorage.setItem("portalClient", JSON.stringify(data.client));
-      setLocation("/portal-cliente/formulario");
+      setLocation("/portal-cliente/dashboard");
     } catch (err: any) {
       toast({ title: "Erro no login", description: err.message || "CPF/CNPJ não encontrado", variant: "destructive" });
     } finally {

@@ -234,7 +234,7 @@ function DocumentChecklist({ operationId, finalidade }: { operationId: number; f
     <div className="space-y-3" data-testid="n-document-checklist">
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">{progress?.concluidos || 0} de {progress?.total || 0} concluídos</span>
+          <span className="text-xs text-muted-foreground">{progress?.concluidos || 0} de {progress?.total || 0} concluídos (enviados ou aprovados)</span>
           <span className="text-xs font-medium">{progressPercent}%</span>
         </div>
         <Progress value={progressPercent} className="h-2" />
@@ -1699,7 +1699,7 @@ function FormularioClienteSection({ operationId }: { operationId: number }) {
           <div className="space-y-1">
             {formulario.documentos.map((doc: any) => (
               <div key={doc.id} className="flex items-center justify-between p-1.5 rounded border">
-                <span className="truncate">{doc.nomeDocumento || doc.tipoDocumento}</span>
+                <span className="truncate">{doc.nome || doc.tipoDocumento}</span>
                 <div className="flex items-center gap-1">
                   <Badge variant={doc.status === "aprovado" ? "default" : doc.status === "rejeitado" ? "destructive" : "secondary"} className="text-[9px] h-4">{doc.status}</Badge>
                   {doc.driveFileUrl && (

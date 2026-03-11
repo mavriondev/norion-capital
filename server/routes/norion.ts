@@ -1,4 +1,12 @@
 // @ts-nocheck
+function safeErrorMsg(err: any, fallback = "Erro interno do servidor"): string {
+  const msg = err?.message || "";
+  if (msg.includes("relation") || msg.includes("column") || msg.includes("syntax") || msg.includes("violates") || msg.includes("duplicate key") || msg.includes("ECONNREFUSED")) {
+    console.error("[norion-route-error]", msg);
+    return fallback;
+  }
+  return msg || fallback;
+}
 import type { Express } from "express";
 import { eq, and, desc, ilike, sql, gte, lte, or } from "drizzle-orm";
 import { companies, norionOperations, norionDocuments, norionFundosParceiros, norionEnviosFundos, orgSettings, norionCafRegistros, norionFormularioCliente, norionClientUsers, norionNotificacoes, companyDataSources, companyTimelineEvents } from "@shared/schema";
@@ -238,7 +246,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         obrigatorio: obrigatorio ?? false,
       });
       res.json(doc);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/operations", async (req, res) => {
@@ -257,7 +265,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         return { ...op, company, docProgress };
       }));
       res.json(enriched);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/norion/operations", async (req, res) => {
@@ -285,7 +293,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         });
       }
       res.json(op);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.patch("/api/norion/operations/:id", async (req, res) => {
@@ -328,7 +336,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         entity: "norion_operation", entityId: opId, entityTitle: "Operação #" + opId,
         action: "updated", changes: updateData });
       res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.delete("/api/norion/operations/:id", async (req, res) => {
@@ -341,7 +349,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       await db.delete(norionDocuments).where(eq(norionDocuments.operationId, opId));
       await db.delete(norionOperations).where(and(eq(norionOperations.id, opId), eq(norionOperations.orgId, orgId)));
       res.json({ success: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/norion/profile/:companyId", async (req, res) => {
@@ -353,7 +361,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const perfil = calcularPerfil(company);
       await db.update(companies).set({ norionProfile: perfil } as any).where(eq(companies.id, companyId));
       res.json({ companyId, norionProfile: perfil });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/norion/recalculate-profiles", async (req, res) => {
@@ -367,64 +375,110 @@ export function registerNorionRoutes(app: Express, db: any) {
         if (perfil === "alto") alto++; else if (perfil === "medio") medio++; else baixo++;
       }
       res.json({ total: all.length, alto, medio, baixo });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/dashboard", async (req, res) => {
     try {
       const orgId = getOrgId();
-      const ops = await db.select().from(norionOperations).where(eq(norionOperations.orgId, orgId));
-      const allCompanies = await db.select().from(companies).where(eq(companies.orgId, orgId));
-      const aprovadas = ops.filter(o => ["aprovado","comissao_gerada"].includes(o.stage));
-      const recebidas = ops.filter(o => o.comissaoRecebida);
 
-      const allForms = await db.select().from(norionFormularioCliente).where(eq(norionFormularioCliente.orgId, orgId));
-      const formulariosAguardando = allForms.filter(f => f.status === "enviado").length;
-      const formulariosEmRevisao = allForms.filter(f => f.status === "em_revisao").length;
+      const [opsCount] = await db.select({ count: sql<number>`count(*)` }).from(norionOperations).where(eq(norionOperations.orgId, orgId));
+      const [companiesCount] = await db.select({ count: sql<number>`count(*)` }).from(companies).where(eq(companies.orgId, orgId));
 
-      const recentOps = ops
-        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-        .slice(0, 5)
-        .map(o => {
-          const comp = allCompanies.find(c => c.id === o.companyId);
-          return {
-            id: o.id,
-            companyName: comp?.tradeName || comp?.legalName || "—",
-            stage: o.stage,
-            valorSolicitado: (o.diagnostico as any)?.valorSolicitado || 0,
-            valorAprovado: o.valorAprovado,
-            createdAt: o.createdAt,
-          };
-        });
+      const stageCountsRaw = await db.select({
+        stage: norionOperations.stage,
+        count: sql<number>`count(*)`,
+        sumAprovado: sql<number>`coalesce(sum(${norionOperations.valorAprovado}), 0)`,
+        sumSolicitado: sql<number>`coalesce(sum((${norionOperations.diagnostico}->>'valorSolicitado')::numeric), 0)`,
+        sumComissao: sql<number>`coalesce(sum(${norionOperations.valorComissao}), 0)`,
+      }).from(norionOperations).where(eq(norionOperations.orgId, orgId)).groupBy(norionOperations.stage);
 
-      const profileDist = {
-        alto: allCompanies.filter(c => (c.norionProfile as string)?.toLowerCase() === "alto").length,
-        medio: allCompanies.filter(c => (c.norionProfile as string)?.toLowerCase() === "medio").length,
-        baixo: allCompanies.filter(c => !c.norionProfile || (c.norionProfile as string)?.toLowerCase() === "baixo").length,
-      };
+      const porEtapa: Record<string, number> = {};
+      let totalOps = 0, volumeAprovado = 0, volumeSolicitado = 0, totalAprovadas = 0;
+      for (const row of stageCountsRaw) {
+        const cnt = Number(row.count);
+        porEtapa[row.stage] = cnt;
+        totalOps += cnt;
+        volumeSolicitado += Number(row.sumSolicitado);
+        if (["aprovado", "comissao_gerada"].includes(row.stage)) {
+          volumeAprovado += Number(row.sumAprovado);
+          totalAprovadas += cnt;
+        }
+      }
+
+      const [comissaoRecebida] = await db.select({
+        total: sql<number>`coalesce(sum(${norionOperations.valorComissao}), 0)`
+      }).from(norionOperations).where(and(eq(norionOperations.orgId, orgId), eq(norionOperations.comissaoRecebida, true)));
+
+      const [comissaoAPagar] = await db.select({
+        total: sql<number>`coalesce(sum(${norionOperations.valorComissao}), 0)`
+      }).from(norionOperations).where(and(
+        eq(norionOperations.orgId, orgId),
+        eq(norionOperations.comissaoRecebida, false),
+        or(eq(norionOperations.stage, "aprovado"), eq(norionOperations.stage, "comissao_gerada"))
+      ));
+
+      const recentOpsRaw = await db.select().from(norionOperations)
+        .where(eq(norionOperations.orgId, orgId))
+        .orderBy(desc(norionOperations.createdAt))
+        .limit(5);
+      const companyIds = recentOpsRaw.map(o => o.companyId).filter(Boolean);
+      const recentCompanies = companyIds.length > 0
+        ? await db.select().from(companies).where(sql`${companies.id} IN (${sql.join(companyIds.map(id => sql`${id}`), sql`, `)})`)
+        : [];
+      const compMap = new Map(recentCompanies.map(c => [c.id, c]));
+      const recentOps = recentOpsRaw.map(o => {
+        const comp = o.companyId ? compMap.get(o.companyId) : null;
+        return {
+          id: o.id,
+          companyName: comp?.tradeName || comp?.legalName || "—",
+          stage: o.stage,
+          valorSolicitado: (o.diagnostico as any)?.valorSolicitado || 0,
+          valorAprovado: o.valorAprovado,
+          createdAt: o.createdAt,
+        };
+      });
+
+      const profileCountsRaw = await db.select({
+        profile: companies.norionProfile,
+        count: sql<number>`count(*)`,
+      }).from(companies).where(eq(companies.orgId, orgId)).groupBy(companies.norionProfile);
+      const profileDist = { alto: 0, medio: 0, baixo: 0 };
+      for (const row of profileCountsRaw) {
+        const p = ((row.profile as string) || "").toLowerCase();
+        const cnt = Number(row.count);
+        if (p === "alto") profileDist.alto = cnt;
+        else if (p === "medio") profileDist.medio = cnt;
+        else profileDist.baixo += cnt;
+      }
+
+      const [formsAguardando] = await db.select({ count: sql<number>`count(*)` }).from(norionFormularioCliente)
+        .where(and(eq(norionFormularioCliente.orgId, orgId), eq(norionFormularioCliente.status, "enviado")));
+      const [formsEmRevisao] = await db.select({ count: sql<number>`count(*)` }).from(norionFormularioCliente)
+        .where(and(eq(norionFormularioCliente.orgId, orgId), eq(norionFormularioCliente.status, "em_revisao")));
 
       res.json({
-        totalOperacoes: ops.length,
-        totalEmpresas: allCompanies.length,
-        volumeAprovado: aprovadas.reduce((s, o) => s + (o.valorAprovado || 0), 0),
-        volumeSolicitado: ops.reduce((s, o) => s + ((o.diagnostico as any)?.valorSolicitado || 0), 0),
-        comissaoTotal: recebidas.reduce((s, o) => s + (o.valorComissao || 0), 0),
-        comissaoAPagar: aprovadas.filter(o => !o.comissaoRecebida).reduce((s, o) => s + (o.valorComissao || 0), 0),
-        taxaAprovacao: ops.length > 0 ? Math.round((aprovadas.length / ops.length) * 100) : 0,
+        totalOperacoes: totalOps,
+        totalEmpresas: Number(companiesCount.count),
+        volumeAprovado,
+        volumeSolicitado,
+        comissaoTotal: Number(comissaoRecebida.total),
+        comissaoAPagar: Number(comissaoAPagar.total),
+        taxaAprovacao: totalOps > 0 ? Math.round((totalAprovadas / totalOps) * 100) : 0,
         porEtapa: {
-          identificado: ops.filter(o => o.stage === "identificado").length,
-          diagnostico: ops.filter(o => o.stage === "diagnostico").length,
-          enviado_fundos: ops.filter(o => o.stage === "enviado_fundos").length,
-          em_analise: ops.filter(o => o.stage === "em_analise").length,
-          aprovado: ops.filter(o => o.stage === "aprovado").length,
-          comissao_gerada: ops.filter(o => o.stage === "comissao_gerada").length,
+          identificado: porEtapa["identificado"] || 0,
+          diagnostico: porEtapa["diagnostico"] || 0,
+          enviado_fundos: porEtapa["enviado_fundos"] || 0,
+          em_analise: porEtapa["em_analise"] || 0,
+          aprovado: porEtapa["aprovado"] || 0,
+          comissao_gerada: porEtapa["comissao_gerada"] || 0,
         },
         recentOps,
         profileDist,
-        formulariosAguardando,
-        formulariosEmRevisao,
+        formulariosAguardando: Number(formsAguardando.count),
+        formulariosEmRevisao: Number(formsEmRevisao.count),
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: "Erro ao carregar dashboard" }); }
   });
 
   const cotacoesCache: { data: any; timestamp: number } = { data: null, timestamp: 0 };
@@ -902,7 +956,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const fundo = await consultarFundoCVM(req.params.cnpj);
       if (!fundo) return res.status(404).json({ message: "Fundo não encontrado na CVM" });
       res.json(fundo);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/fundos-estruturados", async (req, res) => {
@@ -914,7 +968,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const tipo = req.query.tipo as string | undefined;
       const fundos = await listarFundosEstruturadosANBIMA(tipo, creds);
       res.json({ configured: true, total: fundos.length, fundos });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/fundos-economia-real", async (req, res) => {
@@ -923,7 +977,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const search = req.query.search as string | undefined;
       const fundos = await listarFundosEconomiaReal(tipo, search);
       res.json({ total: fundos.length, fundos });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { console.error("[fundos-economia-real]", err); res.status(500).json({ message: "Erro ao buscar fundos" }); }
   });
 
   app.get("/api/norion/settings", async (req, res) => {
@@ -939,7 +993,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         ? val.clientId.substring(0, 4) + "***"
         : (process.env.ANBIMA_CLIENT_ID ? process.env.ANBIMA_CLIENT_ID.substring(0, 4) + "***" : "");
       res.json({ configured, clientId: maskedId, source: fromDb ? "database" : (fromEnv ? "env" : "none") });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/norion/settings", async (req, res) => {
@@ -957,7 +1011,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       }
       clearAnbimaTokenCache();
       res.json({ success: true, message: "Credenciais ANBIMA salvas com sucesso" });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/relatorio-comissoes", async (req, res) => {
@@ -1047,7 +1101,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         linhas,
         empresasDisponiveis: allCompanies.map(c => ({ id: c.id, name: c.tradeName || c.legalName })),
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/operations/:id/documents", async (req, res) => {
@@ -1063,7 +1117,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         documents: docs,
         progress: { total, concluidos, obrigatorios: obrigatorios.length, obrigatoriosConcluidos },
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/norion/operations/:id/documents/generate", async (req, res) => {
@@ -1088,7 +1142,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         created.push(doc);
       }
       res.json({ message: "Checklist gerado", documents: created });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.patch("/api/norion/documents/:id", async (req, res) => {
@@ -1108,7 +1162,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const updated = await storage.updateNorionDocument(docId, orgId, updateData);
       if (!updated) return res.status(404).json({ message: "Documento não encontrado" });
       res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.delete("/api/norion/documents/:id", async (req, res) => {
@@ -1116,7 +1170,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const orgId = getOrgId();
       await storage.deleteNorionDocument(Number(req.params.id), orgId);
       res.json({ success: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/norion/documents/:id/upload", async (req, res) => {
@@ -1157,7 +1211,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const orgId = getOrgId();
       const fundos = await storage.getNorionFundosParceiros(orgId);
       res.json(fundos);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/norion/fundos-parceiros", async (req, res) => {
@@ -1176,7 +1230,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         entity: "norion_fundo_parceiro", entityId: fundo.id, entityTitle: nome,
         action: "created", changes: {} });
       res.json(fundo);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.patch("/api/norion/fundos-parceiros/:id", async (req, res) => {
@@ -1191,7 +1245,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         entity: "norion_fundo_parceiro", entityId: id, entityTitle: existing.nome,
         action: "updated", changes: req.body });
       res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.delete("/api/norion/fundos-parceiros/:id", async (req, res) => {
@@ -1202,7 +1256,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       if (!existing) return res.status(404).json({ message: "Fundo não encontrado" });
       await storage.deleteNorionFundoParceiro(id, orgId);
       res.json({ success: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/fundos-parceiros/:id/historico", async (req, res) => {
@@ -1239,7 +1293,7 @@ export function registerNorionRoutes(app: Express, db: any) {
           tempoMedioResposta: tempoRespostas.length > 0 ? Math.round(tempoRespostas.reduce((a, b) => a + b, 0) / tempoRespostas.length) : null,
         },
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/operations/:id/envios", async (req, res) => {
@@ -1252,7 +1306,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         return { ...e, fundoParceiro: fundo };
       }));
       res.json(enriched);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/norion/operations/:id/envios", async (req, res) => {
@@ -1290,7 +1344,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         entityTitle: `${confirmarEnvio ? 'Enviado' : 'Selecionado'} para ${fundo.nome}`,
         action: "created", changes: { operationId, fundoParceiroId, status: statusInicial } });
       res.json(envio);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.patch("/api/norion/envios/:id", async (req, res) => {
@@ -1322,7 +1376,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         entity: "norion_envio_fundo", entityId: envioId, entityTitle: `Envio #${envioId}`,
         action: "updated", changes: updateData });
       res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.patch("/api/norion/companies/:id/caf", async (req, res) => {
@@ -1336,7 +1390,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const updated = { ...currentEnrichment, caf: cafData };
       const [result] = await db.update(companies).set({ enrichmentData: updated } as any).where(eq(companies.id, companyId)).returning();
       res.json(result);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.patch("/api/norion/companies/:id/socios-contato", async (req, res) => {
@@ -1349,7 +1403,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const updated = { ...currentEnrichment, sociosContato: req.body.sociosContato };
       const [result] = await db.update(companies).set({ enrichmentData: updated } as any).where(eq(companies.id, companyId)).returning();
       res.json(result);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   const sicorCache = new Map<string, { data: any; expiry: number }>();
@@ -1561,7 +1615,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         }
       }
       res.json(linhas);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/operations/:id/matching-fundos", async (req, res) => {
@@ -1962,7 +2016,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         return b.score - a.score;
       });
       res.json(results);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/caf", async (req, res) => {
@@ -1988,7 +2042,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         );
       }
       res.json(rows);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/caf/exportar-csv", async (req, res) => {
@@ -2034,7 +2088,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
       res.setHeader("Content-Disposition", `attachment; filename="caf_registros_${new Date().toISOString().slice(0,10)}.csv"`);
       res.send(csvContent);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/caf/consultar", async (req, res) => {
@@ -2130,7 +2184,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         if (r.rendaBrutaAnual) totalRenda += r.rendaBrutaAnual;
       });
       res.json({ total, ativos, vencidos, porGrupo, porUf, totalArea, totalRenda });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/caf/:id", async (req, res) => {
@@ -2139,7 +2193,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const [row] = await db.select().from(norionCafRegistros).where(and(eq(norionCafRegistros.id, Number(req.params.id)), eq(norionCafRegistros.orgId, orgId)));
       if (!row) return res.status(404).json({ message: "Registro CAF não encontrado" });
       res.json(row);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/norion/caf", async (req, res) => {
@@ -2167,7 +2221,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         }
       }
       res.json(row);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.patch("/api/norion/caf/:id", async (req, res) => {
@@ -2198,7 +2252,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         }
       }
       res.json(row);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.delete("/api/norion/caf/:id", async (req, res) => {
@@ -2209,7 +2263,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       if (!existing) return res.status(404).json({ message: "Registro CAF não encontrado" });
       await db.delete(norionCafRegistros).where(eq(norionCafRegistros.id, cafId));
       res.json({ ok: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/norion/caf/importar-csv", async (req, res) => {
@@ -2243,7 +2297,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         inserted.push(row);
       }
       res.json({ importados: inserted.length, registros: inserted });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/caf/consulta-dap/:cpf", async (req, res) => {
@@ -2289,7 +2343,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const orgId = getOrgId();
       const result = await storage.getCompanies(orgId);
       res.json(result);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/crm/companies", async (req, res) => {
@@ -2310,7 +2364,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         enrichCompany(company.id, db).catch(err => console.error("[Enrich] Auto-enrich failed for company", company.id, err.message));
       }
       res.json(company);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.patch("/api/crm/companies/:id", async (req, res) => {
@@ -2336,7 +2390,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         entity: "company", entityId: id, entityTitle: existing.legalName,
         action: "updated", changes: updateData });
       res.json(updated);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.delete("/api/crm/companies/:id", async (req, res) => {
@@ -2352,7 +2406,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         entity: "company", entityId: id, entityTitle: existing.legalName,
         action: "deleted", changes: {} });
       res.json({ success: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/cnpj/:cnpj", async (req, res) => {
@@ -2385,7 +2439,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         phones: data.ddd_telefone_1 ? [data.ddd_telefone_1] : [],
         emails: data.email ? [data.email] : [],
       });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/norion/companies/:id/enrich", async (req, res) => {
@@ -2397,7 +2451,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const result = await enrichCompany(companyId, db);
       const [updated] = await db.select().from(companies).where(eq(companies.id, companyId));
       res.json({ ...result, company: updated });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.post("/api/norion/companies/:id/enrich/:source", async (req, res) => {
@@ -2410,7 +2464,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const data = await enrichSource(companyId, sourceType, db);
       const [updated] = await db.select().from(companies).where(eq(companies.id, companyId));
       res.json({ source: sourceType, data, company: updated });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/companies/:id/data-sources", async (req, res) => {
@@ -2420,7 +2474,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const sources = await db.select().from(companyDataSources)
         .where(and(eq(companyDataSources.companyId, companyId), eq(companyDataSources.orgId, orgId)));
       res.json(sources);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/companies/:id/operations", async (req, res) => {
@@ -2436,7 +2490,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         return { ...op, docProgress };
       }));
       res.json(enriched);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/sdr/queue", async (req, res) => {
@@ -2458,7 +2512,7 @@ export function registerNorionRoutes(app: Express, db: any) {
           createdAt: c.createdAt,
         }));
       res.json(leads);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.patch("/api/sdr/leads/:id", async (req, res) => {
@@ -2472,7 +2526,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       tags.sdrStatus = req.body.status;
       await storage.updateCompany(id, { tags });
       res.json({ success: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   // Endpoint para obter histórico completo de uma empresa
@@ -2489,7 +2543,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         .orderBy(desc(companyTimelineEvents.createdAt));
       
       res.json(timeline);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   // Endpoint para obter dados agregados de uma fonte específica
@@ -2511,7 +2565,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         .orderBy(desc(companyDataSources.createdAt));
       
       res.json(sources);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   // ============================================================
@@ -2529,7 +2583,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
       ).slice(0, 30);
       res.json(all);
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.get("/api/norion/notificacoes/count", async (req, res) => {
@@ -2539,7 +2593,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const userId = (req.user as any).id;
       const count = await storage.contarNaoLidas(orgId, userId);
       res.json({ count });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.patch("/api/norion/notificacoes/marcar-todas-lidas", async (req, res) => {
@@ -2549,7 +2603,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const userId = (req.user as any).id;
       await storage.marcarTodasLidas(orgId, userId);
       res.json({ ok: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.patch("/api/norion/notificacoes/:id/lida", async (req, res) => {
@@ -2558,7 +2612,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const orgId = getOrgId();
       await storage.marcarNotificacaoLida(Number(req.params.id), orgId);
       res.json({ ok: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   app.delete("/api/norion/notificacoes/:id", async (req, res) => {
@@ -2567,7 +2621,7 @@ export function registerNorionRoutes(app: Express, db: any) {
       const orgId = getOrgId();
       await storage.deletarNotificacao(Number(req.params.id), orgId);
       res.json({ ok: true });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
   // Endpoint para autocomplete de CNPJ
@@ -2596,7 +2650,7 @@ export function registerNorionRoutes(app: Express, db: any) {
         tradeName: c.tradeName,
         norionProfile: c.norionProfile,
       })));
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(500).json({ message: safeErrorMsg(err) }); }
   });
 
 }

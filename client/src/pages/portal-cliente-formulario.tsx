@@ -454,7 +454,9 @@ export default function PortalClienteFormulario() {
           uf: data.uf || prev.uf,
         }));
       }
-    } catch { }
+    } catch {
+      toast({ title: "Erro ao buscar CEP", description: "Não foi possível consultar o endereço. Preencha manualmente.", variant: "destructive" });
+    }
     setCepLoading(false);
   };
 
@@ -483,7 +485,9 @@ export default function PortalClienteFormulario() {
         setFormData(prev => ({ ...prev, ...updates }));
         toast({ title: "Dados da empresa preenchidos", description: "Verifique os campos de endereço e empresa." });
       }
-    } catch { }
+    } catch {
+      toast({ title: "Erro ao buscar CNPJ", description: "Não foi possível consultar os dados da empresa.", variant: "destructive" });
+    }
     setCnpjLoading(false);
   };
 
@@ -1076,7 +1080,7 @@ export default function PortalClienteFormulario() {
                                 return (
                                   <div key={doc.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-700 bg-slate-800/60" data-testid={`portal-doc-${doc.id}`}>
                                     <div className="flex-1 min-w-0 mr-3">
-                                      <p className="text-sm font-medium truncate text-slate-100">{doc.nomeDocumento || doc.tipoDocumento}</p>
+                                      <p className="text-sm font-medium truncate text-slate-100">{doc.nome || doc.tipoDocumento}</p>
                                       <div className="flex items-center gap-2 mt-0.5">
                                         <Badge variant={statusConf.variant} className="text-[10px]">{statusConf.label}</Badge>
                                         {doc.obrigatorio && <span className="text-[10px] text-red-400">Obrigatório</span>}
